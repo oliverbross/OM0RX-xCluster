@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-11T09:00:00+09:30",
+  "title": "Design System: OM0RX-xCluster",
+  "extensions": {
+    "colorMeta": {
+      "console-background": { "role": "neutral", "displayName": "Night Console", "canonical": "#07111F", "tonalRamp": ["#050C16", "#07111F", "#0B1728", "#101F34"] },
+      "action-teal": { "role": "primary", "displayName": "Operator Teal", "canonical": "#12D6A0", "tonalRamp": ["#073F35", "#0A8065", "#12D6A0", "#8DF4D5"] },
+      "data-cyan": { "role": "secondary", "displayName": "Signal Cyan", "canonical": "#35C8F5", "tonalRamp": ["#0B3E50", "#147F9F", "#35C8F5", "#A6E9FC"] },
+      "dxcc-atno": { "role": "tertiary", "displayName": "Worked Orange", "canonical": "#FF8C00", "tonalRamp": ["#4D2A00", "#A95D00", "#FF8C00", "#FFD093"] },
+      "confirmed": { "role": "primary", "displayName": "Confirmed Green", "canonical": "#10B981", "tonalRamp": ["#063B2B", "#0B7B59", "#10B981", "#8BE5C5"] }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Window Title", "purpose": "Window and modal identity." },
+      "body": { "displayName": "Operations Body", "purpose": "Dense live and historical data." },
+      "label": { "displayName": "Control Label", "purpose": "Filters, table headers, and evidence labels." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "state-only", "value": "native macOS state transition", "purpose": "Connection and selection feedback only; reduced-motion safe." }
+    ],
+    "breakpoints": [
+      { "name": "minimum-window", "value": "1180px", "purpose": "Below this width, preserve the table and filter deck with horizontal scrolling." }
+    ]
+  },
+  "components": [],
+  "narrative": {
+    "northStar": "The Live Operator Console",
+    "overview": "A dense native macOS DX operations surface whose dark tonal layers keep attention on callsigns, frequencies, and evidence-backed status. OM0RX semantic colors remain consistent across the stream, history, matrix, and settings.",
+    "keyCharacteristics": ["Dense live table", "Single-row multi-select filters", "Text plus semantic color", "Visible connection and read-only truth"],
+    "rules": [
+      { "name": "The Semantic Color Rule", "body": "Never reuse a call or DXCC status color decoratively in a way that changes its meaning.", "section": "colors" },
+      { "name": "The Dual-Evidence Rule", "body": "LoTW upload and confirmation arrows are independent and turn green only for their own true state.", "section": "colors" }
+    ],
+    "dos": ["Keep filters in one horizontal row.", "Use explicit dashes for untouched matrix cells.", "Keep data before explanation."],
+    "donts": ["Do not wrap filters.", "Do not replace status text with color alone.", "Do not add gradients, glow, or dashboard whitespace."]
+  }
+}

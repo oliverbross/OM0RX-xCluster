@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+dist/*.app
+dist/*.zip
+dist/*.sha256
+*.xcuserstate
+.DS_Store
+.impeccable/review/
