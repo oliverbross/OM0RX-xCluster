@@ -4,17 +4,22 @@ import XClusterCore
 
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
     @State private var passwords: [UUID: String] = [:]
     @State private var selectedTab = "General"
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Settings section", selection: $selectedTab) {
-                Label("General", systemImage: "slider.horizontal.3").tag("General")
-                Label("Clusters", systemImage: "antenna.radiowaves.left.and.right").tag("Clusters")
-                Label("Status Colours", systemImage: "paintpalette").tag("Colours")
-                Label("Specials", systemImage: "star").tag("Specials")
-            }.pickerStyle(.segmented).padding(16)
+            HStack(spacing: 14) {
+                Picker("Settings section", selection: $selectedTab) {
+                    Label("General", systemImage: "slider.horizontal.3").tag("General")
+                    Label("Clusters", systemImage: "antenna.radiowaves.left.and.right").tag("Clusters")
+                    Label("Status Colours", systemImage: "paintpalette").tag("Colours")
+                    Label("Specials", systemImage: "star").tag("Specials")
+                }.pickerStyle(.segmented)
+                Button { dismiss() } label: { Image(systemName: "xmark").font(.headline) }
+                    .buttonStyle(.plain).help("Close Settings").keyboardShortcut(.cancelAction)
+            }.padding(16)
             Divider()
             Group {
                 switch selectedTab {
@@ -25,7 +30,12 @@ struct SettingsView: View {
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
-            HStack { Text(model.lastAction).font(.caption).foregroundStyle(Theme.secondary); Spacer(); Button("Save & Apply") { save() }.buttonStyle(.borderedProminent).tint(Theme.teal) }.padding(14)
+            HStack {
+                Text(model.lastAction).font(.caption).foregroundStyle(Theme.secondary)
+                Spacer()
+                Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Save & Close") { save(); dismiss() }.buttonStyle(.borderedProminent).tint(Theme.teal).keyboardShortcut(.defaultAction)
+            }.padding(14)
         }
         .background(Theme.background)
         .onAppear { for server in model.settings.clusters { passwords[server.id] = SettingsStore.shared.password(for: server.id) } }
@@ -92,13 +102,48 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 8) {
                     ForEach(model.settings.specialRules.indices, id: \.self) { index in
-                        HStack { Toggle("", isOn: $model.settings.specialRules[index].enabled).labelsHidden(); TextField("Badge", text: $model.settings.specialRules[index].name).frame(width: 105); TextField("Regular expression", text: $model.settings.specialRules[index].pattern).font(.system(.body, design: .monospaced)); Button(role: .destructive) { model.settings.specialRules.remove(at: index) } label: { Image(systemName: "trash") }.buttonStyle(.borderless) }
-                            .padding(9).background(Theme.surface).clipShape(RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.rule))
+                        specialEditor(index)
                     }
                 }.padding(16)
             }
-            HStack { Button { model.settings.specialRules.append(SpecialRule(name: "NEW", pattern: #"\bNEW\b"#)) } label: { Label("Add special", systemImage: "plus") }; Spacer(); Text("Matching is case-insensitive and one spot may receive multiple badges.").font(.caption).foregroundStyle(Theme.secondary) }.padding(.horizontal, 16).padding(.bottom, 10)
+            HStack { Button { model.settings.specialRules.append(SpecialRule(name: "NEW", keywords: ["NEW"])) } label: { Label("Add special", systemImage: "plus") }; Spacer(); Text("Matches are case-insensitive. Separate words or phrases with commas.").font(.caption).foregroundStyle(Theme.secondary) }.padding(.horizontal, 16).padding(.bottom, 10)
         }
+    }
+
+    private func specialEditor(_ index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Toggle("Enabled", isOn: $model.settings.specialRules[index].enabled).labelsHidden()
+                labeled("Badge shown in table", TextField("POTA", text: $model.settings.specialRules[index].name).frame(width: 150))
+                labeled("Comment contains any of", TextField("POTA, Parks on the Air", text: keywordBinding(index)))
+                Button(role: .destructive) { model.settings.specialRules.remove(at: index) } label: { Image(systemName: "trash") }.buttonStyle(.borderless).help("Remove this special")
+            }
+            HStack(alignment: .firstTextBaseline) {
+                Text("Reference format").font(.caption2.weight(.semibold)).foregroundStyle(Theme.secondary)
+                Picker("Reference format", selection: $model.settings.specialRules[index].referenceFormat) {
+                    ForEach(SpecialReferenceFormat.allCases) { format in Text(format.title).tag(format) }
+                }.labelsHidden().frame(maxWidth: 260)
+                Text("Also recognise references such as the example shown.").font(.caption).foregroundStyle(Theme.secondary)
+                Spacer()
+            }
+            DisclosureGroup("Advanced matching (optional)") {
+                labeled("Regular expression", TextField("Leave empty unless you need an expert rule", text: $model.settings.specialRules[index].advancedPattern).font(.system(.body, design: .monospaced)))
+                    .padding(.top, 6)
+            }.font(.caption).foregroundStyle(Theme.secondary)
+        }
+        .padding(11).background(Theme.surface).clipShape(RoundedRectangle(cornerRadius: 7)).overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.rule))
+    }
+
+    private func keywordBinding(_ index: Int) -> Binding<String> {
+        Binding(
+            get: { model.settings.specialRules[index].keywords.joined(separator: ", ") },
+            set: { value in
+                model.settings.specialRules[index].keywords = value
+                    .components(separatedBy: CharacterSet(charactersIn: ",;\n"))
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            }
+        )
     }
 
     private func passwordBinding(_ id: UUID) -> Binding<String> { Binding(get: { passwords[id] ?? "" }, set: { passwords[id] = $0 }) }

@@ -27,6 +27,23 @@ final class SpotLogicTests: XCTestCase {
         XCTAssertEqual(SpotLogic.specials(in: "POTA and WWFF", rules: rules), ["POTA", "WWFF"])
     }
 
+    func testFriendlySpecialRulesMatchWordsAndReferenceFormats() {
+        let rules = [
+            SpecialRule(name: "POTA", keywords: ["Parks on the Air"], referenceFormat: .pota),
+            SpecialRule(name: "IOTA", keywords: ["IOTA"], referenceFormat: .iota),
+        ]
+        XCTAssertEqual(SpotLogic.specials(in: "CQ K-1234 from OC-001", rules: rules), ["POTA", "IOTA"])
+        XCTAssertEqual(SpotLogic.specials(in: "Parks on the Air", rules: rules), ["POTA"])
+    }
+
+    func testLegacySpecialRuleMigratesToFriendlyDefaults() throws {
+        let data = #"{"id":"00000000-0000-0000-0000-000000000001","name":"POTA","pattern":"\\bPOTA\\b","enabled":true}"#.data(using: .utf8)!
+        let rule = try JSONDecoder().decode(SpecialRule.self, from: data)
+        XCTAssertEqual(rule.keywords, ["POTA"])
+        XCTAssertEqual(rule.referenceFormat, .pota)
+        XCTAssertEqual(rule.advancedPattern, "")
+    }
+
     func testBundledCountryResolution() throws {
         let resolver = try CTYResolver.bundled()
         let slovakia = try XCTUnwrap(resolver.resolve("OM0AAO"))

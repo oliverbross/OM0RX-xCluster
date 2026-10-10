@@ -53,11 +53,15 @@ public struct LogbookIndex: Sendable {
         var callBands: [String: Set<String>] = [:], callModes: [String: Set<String>] = [:]
         var confirmedCallBandModes = Set<String>(), dxccBands: [Int: Set<String>] = [:], dxccModes: [Int: Set<String>] = [:]
         var workedDXCC = Set<Int>(), confirmedDXCC = Set<Int>(), confirmedDXCCBandModes = Set<String>()
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         var count = 0
         while sqlite3_step(statement) == SQLITE_ROW {
             let call = text(statement, 2).removingPercentEncoding?.uppercased() ?? text(statement, 2).uppercased()
             let band = text(statement, 3).lowercased(), mode = SpotLogic.normalizedMode(text(statement, 5))
-            let date = parseDate(text(statement, 1))
+            let date = dateFormatter.date(from: text(statement, 1)) ?? .distantPast
             let record = QSORecord(id: sqlite3_column_int64(statement, 0), date: date, callsign: call, band: band,
                                    frequencyKHz: Double(text(statement, 4).replacingOccurrences(of: ",", with: ".")) ?? 0,
                                    mode: mode, rstSent: text(statement, 6), rstReceived: text(statement, 7),
@@ -116,12 +120,6 @@ public struct LogbookIndex: Sendable {
 private func text(_ statement: OpaquePointer, _ column: Int32) -> String {
     guard let value = sqlite3_column_text(statement, column) else { return "" }
     return String(cString: value)
-}
-
-private func parseDate(_ value: String) -> Date {
-    let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = TimeZone(secondsFromGMT: 0)
-    formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-    return formatter.date(from: value) ?? .distantPast
 }
 
 private func key(_ first: String, _ band: String, _ mode: String) -> String { "\(first)|\(band.lowercased())|\(SpotLogic.normalizedMode(mode))" }

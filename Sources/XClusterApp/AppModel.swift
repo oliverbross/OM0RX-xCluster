@@ -39,7 +39,8 @@ final class AppModel: ObservableObject {
     private let hub = ClusterHub()
     private let resolver: CTYResolver?
     private var refreshTask: Task<Void, Never>?
-    private var lastLogbookModification: Date?
+    private var lastLogbookSignature: String?
+    private var loadedLogbookPath: String?
 
     init() {
         settings = SettingsStore.shared.load()
@@ -76,7 +77,7 @@ final class AppModel: ObservableObject {
         refreshTask?.cancel()
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
                 self?.reloadLogbook(force: false)
             }
         }
@@ -106,9 +107,10 @@ final class AppModel: ObservableObject {
 
     func reloadLogbook(force: Bool) {
         guard !settings.logbookPath.isEmpty else { logbookStatus = "Choose a RUMlog logbook"; return }
+        guard !isLoadingLogbook else { return }
         let url = URL(fileURLWithPath: settings.logbookPath)
-        let modified = (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
-        guard force || modified != lastLogbookModification else { return }
+        let signature = logbookSignature(for: url)
+        guard force || signature != lastLogbookSignature else { return }
         isLoadingLogbook = true; logbookStatus = "Reading \(url.lastPathComponent)…"
         Task { [weak self] in
             let outcome: (LogbookIndex?, String?) = await Task.detached(priority: .utility) {
@@ -117,8 +119,19 @@ final class AppModel: ObservableObject {
             }.value
             guard let self else { return }
             if let index = outcome.0 {
-                logbook = index; lastLogbookModification = index.modifiedAt
+                let previous = logbook
+                let standardizedPath = url.standardizedFileURL.path
+                let hadPreviousSnapshot = previous.loadedAt != .distantPast && loadedLogbookPath == standardizedPath
+                let newlyLogged = hadPreviousSnapshot ? Set(spots.compactMap { spot in
+                    index.history(call: spot.callsign, country: spot.country).records.count > previous.history(call: spot.callsign, country: spot.country).records.count ? spot.callsign : nil
+                }) : []
+                logbook = index
+                loadedLogbookPath = standardizedPath
+                if !newlyLogged.isEmpty { spots.removeAll { newlyLogged.contains($0.callsign) } }
+                reclassifyVisibleSpots()
+                lastLogbookSignature = logbookSignature(for: url)
                 logbookStatus = "\(index.recordCount.formatted()) contacts · read-only"
+                if !newlyLogged.isEmpty { lastAction = "Removed \(newlyLogged.sorted().joined(separator: ", ")) after RUMlog logged the contact" }
             } else {
                 logbookStatus = outcome.1 ?? "Could not read the RUMlog logbook."
             }
@@ -153,6 +166,27 @@ final class AppModel: ObservableObject {
     func clearFilters() { filter = SpotFilter() }
 
     func color(for status: String) -> Color { Color(hex: settings.statusPalette.colors[status] ?? "#B0B0B0") }
+
+    private func reclassifyVisibleSpots() {
+        for index in spots.indices {
+            let status = logbook.classify(call: spots[index].callsign, band: spots[index].band, mode: spots[index].mode, adif: spots[index].country?.adif)
+            spots[index].callStatus = status.0
+            spots[index].dxccStatus = status.1
+            spots[index].workedBefore = status.2
+            let score = SpotLogic.score(callStatus: status.0, dxccStatus: status.1, specials: spots[index].specialTags, source: spots[index].source)
+            spots[index].score = score.0
+            spots[index].scoreReasons = score.1
+        }
+    }
+
+    private func logbookSignature(for url: URL) -> String {
+        [url.path, url.path + "-wal"].map { path in
+            guard let values = try? FileManager.default.attributesOfItem(atPath: path) else { return "missing" }
+            let size = (values[.size] as? NSNumber)?.uint64Value ?? 0
+            let modified = (values[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+            return "\(size):\(modified)"
+        }.joined(separator: "|")
+    }
 }
 
 extension Color {

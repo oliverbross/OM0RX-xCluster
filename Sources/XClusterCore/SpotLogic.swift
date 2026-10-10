@@ -52,7 +52,13 @@ public enum SpotLogic {
 
     public static func specials(in comment: String, rules: [SpecialRule]) -> [String] {
         rules.filter(\.enabled).compactMap { rule in
-            comment.range(of: rule.pattern, options: [.regularExpression, .caseInsensitive]) == nil ? nil : rule.name
+            let keywordMatch = rule.keywords.contains { comment.localizedCaseInsensitiveContains($0) }
+            let referenceMatch = rule.referenceFormat.pattern.map {
+                comment.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil
+            } ?? false
+            let advancedMatch = !rule.advancedPattern.isEmpty &&
+                comment.range(of: rule.advancedPattern, options: [.regularExpression, .caseInsensitive]) != nil
+            return keywordMatch || referenceMatch || advancedMatch ? rule.name : nil
         }
     }
 

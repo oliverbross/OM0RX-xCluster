@@ -7,6 +7,7 @@ enum Theme {
     static let rule = Color(hex: "#243A55"), text = Color(hex: "#E6EDF6"), secondary = Color(hex: "#92A7BF")
     static let cyan = Color(hex: "#35C8F5"), teal = Color(hex: "#12D6A0"), amber = Color(hex: "#F3B23C"), danger = Color(hex: "#FF6B5E")
     static let worked = Color(hex: "#FF8C00"), confirmed = Color(hex: "#10B981")
+    static let tableHeader = Color(hex: "#3A3A3A"), tableRow = Color(hex: "#292B29"), tableRowAlternate = Color(hex: "#2E302D")
 }
 
 struct ContentView: View {
@@ -21,7 +22,7 @@ struct ContentView: View {
         }
         .background(Theme.background)
         .sheet(item: $model.historySpot) { spot in HistorySheet(spot: spot).environmentObject(model) }
-        .sheet(isPresented: $model.showingSettings) { SettingsView().environmentObject(model).preferredColorScheme(.dark).frame(width: 760, height: 600) }
+        .sheet(isPresented: $model.showingSettings) { SettingsView().environmentObject(model).preferredColorScheme(.dark).frame(width: 860, height: 680) }
     }
 
     private var statusRail: some View {
@@ -48,20 +49,16 @@ struct ContentView: View {
     private var filterDeck: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                Menu { ForEach([50, 100, 200, 500], id: \.self) { count in Button(count == model.settings.maximumSpots ? "✓ \(count)" : "\(count)") { model.settings.maximumSpots = count } } } label: { FilterLabel(title: "Show: \(model.settings.maximumSpots)", icon: "list.number", active: false, accent: Color(hex: "#659DFF")) }
+                Menu { ForEach([50, 100, 200, 500], id: \.self) { count in Button(count == model.settings.maximumSpots ? "✓ \(count)" : "\(count)") { model.settings.maximumSpots = count } } } label: { FilterLabel(title: "Show: \(model.settings.maximumSpots)", icon: "list.number", active: false, accent: Color(hex: "#659DFF")) }.coloredFilter(accent: Color(hex: "#659DFF"), active: false)
                 MultiSelectMenu(title: "Bands", icon: "waveform.path", values: SpotLogic.bands, selection: $model.filter.bands, accent: Theme.cyan)
                 MultiSelectMenu(title: "Modes", icon: "dial.medium", values: SpotLogic.modes, selection: $model.filter.modes, accent: Color(hex: "#A78BFA"))
                 MultiSelectMenu(title: "Continent", icon: "globe.europe.africa", values: ["AF", "AN", "AS", "EU", "NA", "OC", "SA"], selection: $model.filter.continents, accent: Color(hex: "#69D69A"))
                 MultiSelectMenu(title: "Call Status", icon: "person.crop.circle.badge.questionmark", values: ["New Call", "New Band", "New Mode", "New Band+Mode", "Worked", "Confirmed"], selection: $model.filter.callStatuses, accent: Color(hex: "#FF8B5C"))
                 MultiSelectMenu(title: "DXCC Status", icon: "trophy", values: ["ATNO", "C/New Band", "C/New Mode", "C/New Band+Mode", "W/New Band", "W/New Mode", "W/New Band+Mode", "Worked", "Confirmed", "Unknown"], selection: $model.filter.dxccStatuses, accent: Color(hex: "#F3C969"))
                 MultiSelectMenu(title: "Special", icon: "star", values: model.settings.specialRules.filter(\.enabled).map(\.name), selection: $model.filter.specials, accent: Color(hex: "#F47BC5"))
-                Menu {
-                    Button("All") { model.filter.sources = ["cluster", "rbl"] }
-                    Divider()
-                    Toggle("DX Cluster", isOn: sourceBinding("cluster")); Toggle("RBN / Skimmer", isOn: sourceBinding("rbl"))
-                } label: { FilterLabel(title: model.filter.sources == ["cluster", "rbl"] ? "Sources: All" : "Sources · \(model.filter.sources.count)", icon: "antenna.radiowaves.left.and.right", active: model.filter.sources != ["cluster", "rbl"], accent: Theme.teal) }
+                SourceSelectMenu(selection: $model.filter.sources)
                 MultiSelectMenu(title: "Worked", icon: "checkmark.circle", values: ["Worked before", "Not worked"], selection: $model.filter.worked, accent: Color(hex: "#5FA8FF"))
-                Menu { ForEach(SpotSort.allCases) { sort in Button(sort == model.filter.sort ? "✓ \(sort.rawValue)" : sort.rawValue) { model.filter.sort = sort } } } label: { FilterLabel(title: "Sort: \(model.filter.sort.rawValue)", icon: "arrow.up.arrow.down", active: model.filter.sort != .newest, accent: Color(hex: "#A78BFA")) }
+                Menu { ForEach(SpotSort.allCases) { sort in Button(sort == model.filter.sort ? "✓ \(sort.rawValue)" : sort.rawValue) { model.filter.sort = sort } } } label: { FilterLabel(title: "Sort: \(model.filter.sort.rawValue)", icon: "arrow.up.arrow.down", active: model.filter.sort != .newest, accent: Color(hex: "#A78BFA")) }.coloredFilter(accent: Color(hex: "#A78BFA"), active: model.filter.sort != .newest)
                 if filtersActive { Button("Clear filters") { model.clearFilters() }.buttonStyle(.borderless).foregroundStyle(Theme.cyan) }
                 HStack(spacing: 6) { Image(systemName: "magnifyingglass"); TextField("Call, country or comment", text: $model.filter.query).textFieldStyle(.plain) }
                     .padding(.horizontal, 9).frame(width: 250, height: 28).background(Theme.raised).clipShape(RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.rule))
@@ -75,8 +72,6 @@ struct ContentView: View {
         !model.filter.query.isEmpty || !model.filter.bands.isEmpty || !model.filter.modes.isEmpty || !model.filter.continents.isEmpty || !model.filter.callStatuses.isEmpty || !model.filter.dxccStatuses.isEmpty || !model.filter.specials.isEmpty || !model.filter.worked.isEmpty || model.filter.sources != ["cluster", "rbl"]
     }
 
-    private func sourceBinding(_ source: String) -> Binding<Bool> { Binding(get: { model.filter.sources.contains(source) }, set: { enabled in if enabled { model.filter.sources.insert(source) } else { model.filter.sources.remove(source) } }) }
-
     @ViewBuilder private var inspector: some View {
         if let spot = model.selectedSpot {
             HStack(spacing: 18) {
@@ -86,8 +81,6 @@ struct ContentView: View {
                 detail("Priority", "\(spot.score) · \(spot.scoreReasons.joined(separator: ", "))")
                 detail("Comment", spot.comment.isEmpty ? "No cluster comment" : spot.comment)
                 Spacer()
-                Button("Previous QSOs") { model.historySpot = spot }
-                Button("Tune RUMlogNG") { model.tune(spot) }.buttonStyle(.borderedProminent).tint(Theme.teal)
             }
             .padding(.horizontal, 14).frame(minHeight: 68).background(Theme.raised).overlay(alignment: .top) { Rectangle().fill(Theme.rule).frame(height: 1) }
         } else {
@@ -106,12 +99,7 @@ private struct FilterLabel: View {
     var body: some View {
         Label(title, systemImage: icon)
             .font(.system(size: 12, weight: active ? .semibold : .medium))
-            .padding(.horizontal, 8)
-            .frame(height: 27)
-            .background(accent.opacity(active ? 0.30 : 0.17))
             .foregroundStyle(accent)
-            .clipShape(RoundedRectangle(cornerRadius: 5))
-            .overlay(RoundedRectangle(cornerRadius: 5).stroke(accent.opacity(active ? 0.92 : 0.62)))
     }
 }
 
@@ -119,15 +107,97 @@ private struct MultiSelectMenu: View {
     let title: String, icon: String, values: [String]
     @Binding var selection: Set<String>
     let accent: Color
+    @State private var showingOptions = false
+
     var body: some View {
-        Menu {
-            Button("All") { selection.removeAll() }
-            Divider()
-            ForEach(values, id: \.self) { value in
-                Toggle(value, isOn: Binding(get: { selection.contains(value) }, set: { enabled in if enabled { selection.insert(value) } else { selection.remove(value) } }))
+        Button { showingOptions.toggle() } label: {
+            HStack(spacing: 5) {
+                FilterLabel(title: selection.isEmpty ? "\(title): All" : "\(title) · \(selection.count)", icon: icon, active: !selection.isEmpty, accent: accent)
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
             }
         }
-        label: { FilterLabel(title: selection.isEmpty ? "\(title): All" : "\(title) · \(selection.count)", icon: icon, active: !selection.isEmpty, accent: accent) }
+        .buttonStyle(.plain)
+        .coloredFilterBox(accent: accent, active: !selection.isEmpty)
+        .popover(isPresented: $showingOptions, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title).font(.headline).padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 8)
+                Divider()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 9) {
+                        Toggle("All", isOn: allBinding).toggleStyle(.checkbox).fontWeight(.semibold)
+                        Divider()
+                        ForEach(values, id: \.self) { value in
+                            Toggle(value, isOn: optionBinding(value)).toggleStyle(.checkbox)
+                        }
+                    }.padding(12)
+                }.frame(maxHeight: 360)
+                Divider()
+                HStack { Text(selection.isEmpty ? "All options" : "\(selection.count) selected").font(.caption).foregroundStyle(Theme.secondary); Spacer(); Button("Done") { showingOptions = false }.keyboardShortcut(.defaultAction) }.padding(10)
+            }
+            .frame(minWidth: 220)
+            .background(Theme.surface)
+            .preferredColorScheme(.dark)
+        }
+    }
+
+    private var allBinding: Binding<Bool> {
+        Binding(get: { selection.isEmpty }, set: { enabled in if enabled { selection.removeAll() } })
+    }
+
+    private func optionBinding(_ value: String) -> Binding<Bool> {
+        Binding(get: { selection.contains(value) }, set: { enabled in if enabled { selection.insert(value) } else { selection.remove(value) } })
+    }
+}
+
+private struct SourceSelectMenu: View {
+    @Binding var selection: Set<String>
+    @State private var showingOptions = false
+    private let allSources: Set<String> = ["cluster", "rbl"]
+
+    var body: some View {
+        Button { showingOptions.toggle() } label: {
+            HStack(spacing: 5) {
+                FilterLabel(title: selection == allSources ? "Sources: All" : "Sources · \(selection.count)", icon: "antenna.radiowaves.left.and.right", active: selection != allSources, accent: Theme.teal)
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
+            }
+        }
+        .buttonStyle(.plain)
+        .coloredFilterBox(accent: Theme.teal, active: selection != allSources)
+        .popover(isPresented: $showingOptions, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 9) {
+                Text("Sources").font(.headline)
+                Divider()
+                Toggle("All", isOn: Binding(get: { selection == allSources }, set: { enabled in if enabled { selection = allSources } })).toggleStyle(.checkbox).fontWeight(.semibold)
+                Divider()
+                Toggle("DX Cluster", isOn: sourceBinding("cluster")).toggleStyle(.checkbox)
+                Toggle("RBN / Skimmer", isOn: sourceBinding("rbl")).toggleStyle(.checkbox)
+                Divider()
+                HStack { Spacer(); Button("Done") { showingOptions = false }.keyboardShortcut(.defaultAction) }
+            }
+            .padding(12).frame(minWidth: 220).background(Theme.surface).preferredColorScheme(.dark)
+        }
+    }
+
+    private func sourceBinding(_ source: String) -> Binding<Bool> {
+        Binding(get: { selection.contains(source) }, set: { enabled in if enabled { selection.insert(source) } else { selection.remove(source) } })
+    }
+}
+
+private extension View {
+    func coloredFilter(accent: Color, active: Bool) -> some View {
+        self.menuStyle(.borderlessButton)
+            .fixedSize()
+            .coloredFilterBox(accent: accent, active: active)
+    }
+
+    func coloredFilterBox(accent: Color, active: Bool) -> some View {
+        self.fixedSize()
+            .padding(.horizontal, 8)
+            .frame(height: 27)
+            .background(accent.opacity(active ? 0.30 : 0.17))
+            .foregroundStyle(accent)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(accent.opacity(active ? 0.92 : 0.62)))
     }
 }
 
@@ -150,33 +220,82 @@ private struct SpotTable: View {
 
     private var header: some View {
         HStack(spacing: 0) { ForEach(columns, id: \.0) { name, width in Text(name).font(.caption.bold()).foregroundStyle(Theme.text).frame(width: width, alignment: .leading).padding(.horizontal, 6) } }
-            .frame(height: 32).background(Theme.raised).overlay(alignment: .bottom) { Rectangle().fill(Theme.rule).frame(height: 1) }
+            .frame(height: 32).background(Theme.tableHeader).overlay(alignment: .bottom) { Rectangle().fill(Color(hex: "#4A4A4A")).frame(height: 1) }
     }
 
     private func row(_ spot: DXSpot, index: Int) -> some View {
         HStack(spacing: 0) {
-            cell(spot.receivedAt.formatted(date: .omitted, time: .standard), 78).monospacedDigit()
-            Text("\(spot.score)").font(.caption.bold()).foregroundStyle(spot.score >= 60 ? Theme.amber : Theme.teal).frame(width: 48, alignment: .leading).padding(.horizontal, 6)
-            cell(spot.band, 52).fontWeight(.semibold)
-            cell(String(format: "%.6f", spot.frequencyKHz / 1000), 90).foregroundStyle(Theme.cyan).monospacedDigit()
-            Button(spot.callsign) { model.historySpot = spot }.buttonStyle(.plain).fontWeight(.bold).foregroundStyle(Theme.teal).frame(width: 92, alignment: .leading).padding(.horizontal, 6).help("Show previous QSOs")
-            cell(spot.mode, 64)
-            cell(spot.country?.name.capitalized ?? "Unknown", 150)
-            cell(spot.country.map { String($0.cqZone) } ?? "–", 38)
-            cell(spot.aggregateCount > 1 ? "\(spot.spotter) +\(spot.aggregateCount - 1)" : spot.spotter, 92)
-            cell(spot.callStatus, 112).foregroundStyle(model.color(for: spot.callStatus)).fontWeight(.bold)
-            cell(spot.dxccStatus, 132).foregroundStyle(model.color(for: spot.dxccStatus)).fontWeight(.bold)
-            HStack(spacing: 4) { ForEach(spot.specialTags.prefix(2), id: \.self) { Text($0).font(.system(size: 9, weight: .bold)).padding(.horizontal, 5).padding(.vertical, 2).background(Theme.amber.opacity(0.18)).foregroundStyle(Theme.amber).clipShape(RoundedRectangle(cornerRadius: 3)) } }.frame(width: 132, alignment: .leading).padding(.horizontal, 6)
-            cell(spot.workedBefore.map { "✓ " + $0.formatted(date: .numeric, time: .omitted) } ?? "", 100).foregroundStyle(Theme.teal)
-            cell(spot.comment, 280).foregroundStyle(Theme.secondary)
+            Button { tune(spot) } label: {
+                HStack(spacing: 0) {
+                    cell(spot.receivedAt.formatted(date: .omitted, time: .standard), 78).monospacedDigit()
+                    scoreBadge(spot.score)
+                    cell(spot.band, 52, weight: .bold)
+                    cell(String(format: "%.6f", spot.frequencyKHz / 1000), 90, color: Color(hex: "#4A9EFF")).monospacedDigit()
+                }
+            }.buttonStyle(.plain).help("Tune this spot in RUMlogNG")
+            Button(spot.callsign) { model.historySpot = spot }.buttonStyle(.plain).fontWeight(.bold).foregroundStyle(Color(hex: "#10B981")).frame(width: 92, alignment: .leading).padding(.horizontal, 6).help("Show previous QSOs")
+            Button { tune(spot) } label: {
+                HStack(spacing: 0) {
+                    cell(spot.mode, 64)
+                    cell(spot.country?.name.capitalized ?? "Unknown", 150, color: Color(hex: "#CCCCCC"))
+                    cell(spot.country.map { String($0.cqZone) } ?? "–", 38)
+                    cell(spot.aggregateCount > 1 ? "\(spot.spotter) +\(spot.aggregateCount - 1)" : spot.spotter, 92, color: Color(hex: "#CCCCCC"))
+                    cell(spot.callStatus, 112, color: model.color(for: spot.callStatus), weight: .bold)
+                    cell(spot.dxccStatus, 132, color: model.color(for: spot.dxccStatus), weight: .bold)
+                    HStack(spacing: 4) { ForEach(spot.specialTags.prefix(2), id: \.self) { specialBadge($0) } }.frame(width: 132, alignment: .leading).padding(.horizontal, 6)
+                    cell(spot.workedBefore.map { "✓ " + $0.formatted(date: .numeric, time: .omitted) } ?? "", 100, color: Theme.confirmed, weight: .medium)
+                    cell(spot.comment, 280, color: Color(hex: "#AAAAAA"))
+                }
+            }.buttonStyle(.plain).help("Tune this spot in RUMlogNG")
         }
-        .frame(height: 30).background(model.selectedSpotID == spot.id ? Theme.cyan.opacity(0.16) : (index.isMultiple(of: 2) ? Theme.surface.opacity(0.7) : Theme.background))
+        .frame(height: 30).background(rowBackground(spot, index: index))
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.rule.opacity(0.45)).frame(height: 1) }
-        .contentShape(Rectangle()).onTapGesture(count: 2) { model.selectedSpotID = spot.id; model.tune(spot) }.onTapGesture { model.selectedSpotID = spot.id }
-        .contextMenu { Button("Previous QSOs") { model.historySpot = spot }; Button("Tune RUMlogNG") { model.tune(spot) }; Divider(); Text("\(spot.aggregateCount) report\(spot.aggregateCount == 1 ? "" : "s") from \(spot.aggregateSpotters.joined(separator: ", "))") }
     }
 
-    private func cell(_ value: String, _ width: CGFloat) -> some View { Text(value).font(.system(size: 12)).lineLimit(1).truncationMode(.tail).frame(width: width, alignment: .leading).padding(.horizontal, 6).foregroundStyle(Theme.text) }
+    private func tune(_ spot: DXSpot) { model.selectedSpotID = spot.id; model.tune(spot) }
+
+    private func cell(_ value: String, _ width: CGFloat, color: Color = Theme.text, weight: Font.Weight = .regular) -> some View {
+        Text(value).font(.system(size: 12, weight: weight)).lineLimit(1).truncationMode(.tail).frame(width: width, alignment: .leading).padding(.horizontal, 6).foregroundStyle(color)
+    }
+
+    private func scoreBadge(_ score: Int) -> some View {
+        let colours: (Color, Color) = score >= 80 ? (Color(hex: "#7F1D1D"), Color(hex: "#FECACA")) :
+            score >= 55 ? (Color(hex: "#854D0E"), Color(hex: "#FDE68A")) :
+            score >= 30 ? (Color(hex: "#064E3B"), Color(hex: "#A7F3D0")) : (Color(hex: "#374151"), Color(hex: "#D1D5DB"))
+        return Text("\(score)").font(.system(size: 11, weight: .bold)).padding(.horizontal, 6).frame(height: 20)
+            .background(colours.0).foregroundStyle(colours.1).clipShape(RoundedRectangle(cornerRadius: 4))
+            .frame(width: 48, alignment: .leading).padding(.horizontal, 6)
+    }
+
+    private func specialBadge(_ name: String) -> some View {
+        let palette: (Color, Color, Color)
+        switch name.uppercased() {
+        case "POTA": palette = (Color(hex: "#5F3F2A"), Color(hex: "#FFD4B0"), Color(hex: "#A56F4A"))
+        case "SOTA": palette = (Color(hex: "#3F5F2A"), Color(hex: "#D4FFB0"), Color(hex: "#6FA54A"))
+        case "IOTA": palette = (Color(hex: "#5F2A5F"), Color(hex: "#FFD4FF"), Color(hex: "#A54AA5"))
+        case "WWFF": palette = (Color(hex: "#2A5F5F"), Color(hex: "#B0FFFF"), Color(hex: "#4AA5A5"))
+        case "CASTLE": palette = (Color(hex: "#5F5F2A"), Color(hex: "#FFFFD4"), Color(hex: "#A5A54A"))
+        case "LIGHTHOUSE": palette = (Color(hex: "#4A5F2A"), Color(hex: "#D4FF94"), Color(hex: "#7AA54A"))
+        case "CONTEST": palette = (Color(hex: "#5F3A2A"), Color(hex: "#FFC5A0"), Color(hex: "#A56A4A"))
+        case "IARU": palette = (Color(hex: "#2A3A5F"), Color(hex: "#A0D4FF"), Color(hex: "#4A6AA5"))
+        default: palette = (Color(hex: "#2A3F5F"), Color(hex: "#B0D4FF"), Color(hex: "#4A6FA5"))
+        }
+        return Text(name).font(.system(size: 9, weight: .bold)).padding(.horizontal, 5).padding(.vertical, 2)
+            .background(palette.0).foregroundStyle(palette.1).clipShape(RoundedRectangle(cornerRadius: 3))
+            .overlay(RoundedRectangle(cornerRadius: 3).stroke(palette.2))
+    }
+
+    private func rowBackground(_ spot: DXSpot, index: Int) -> Color {
+        if model.selectedSpotID == spot.id { return Color(hex: "#4A9EFF").opacity(0.40) }
+        let status = spot.dxccStatus
+        if status == "ATNO" { return Color(hex: "#FF8C00").opacity(0.15) }
+        if status.contains("Band+Mode") { return Color(hex: "#E91E63").opacity(0.15) }
+        if status.contains("New Band") { return Color(hex: "#00BFFF").opacity(0.15) }
+        if status.contains("New Mode") { return Color(hex: "#FFC000").opacity(0.15) }
+        if status == "Worked" { return Color(hex: "#B0B0B0").opacity(0.10) }
+        if status == "Confirmed" { return Color(hex: "#646464").opacity(0.10) }
+        return index.isMultiple(of: 2) ? Theme.tableRowAlternate : Theme.tableRow
+    }
 
     private var emptyState: some View {
         VStack(spacing: 10) { Image(systemName: model.connectedCount == 0 ? "antenna.radiowaves.left.and.right.slash" : "line.3.horizontal.decrease.circle").font(.system(size: 30)).foregroundStyle(Theme.secondary); Text(model.connectedCount == 0 ? "No cluster connection" : "No spots match the current filters").font(.headline); Text(model.connectedCount == 0 ? "Check the cluster callsign and network settings." : "Clear one or more filters to widen the live view.").foregroundStyle(Theme.secondary) }
