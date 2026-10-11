@@ -20,6 +20,47 @@ final class SpotLogicTests: XCTestCase {
         XCTAssertEqual(meaningfulNumber.comment, "POTA K-0003Z")
     }
 
+    func testDXSpiderHistoryLineLoadsAsSpotWithOriginalTime() throws {
+        let clusterID = UUID()
+        let raw = try XCTUnwrap(ClusterLineParser.parse(
+            "7150.0 AD4PF       11-Oct-2026 0018Z CQ Dx 59 in FJ24en           <HJ6AZV>",
+            clusterID: clusterID,
+            clusterName: "ShackCQ"
+        ))
+        XCTAssertEqual(raw.clusterID, clusterID)
+        XCTAssertEqual(raw.frequencyKHz, 7150.0)
+        XCTAssertEqual(raw.callsign, "AD4PF")
+        XCTAssertEqual(raw.spotter, "HJ6AZV")
+        XCTAssertEqual(raw.comment, "CQ Dx 59 in FJ24en")
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        XCTAssertEqual(calendar.dateComponents([.year, .month, .day, .hour, .minute], from: raw.receivedAt),
+                       DateComponents(year: 2026, month: 10, day: 11, hour: 0, minute: 18))
+    }
+
+    func testDXSpiderHistoryLineAllowsBlankComment() throws {
+        let raw = try XCTUnwrap(ClusterLineParser.parse(
+            "3830.0 N3ZK        11-Oct-2026 0017Z                                <NF3R>",
+            clusterID: UUID(),
+            clusterName: "ShackCQ"
+        ))
+        XCTAssertEqual(raw.callsign, "N3ZK")
+        XCTAssertEqual(raw.spotter, "NF3R")
+        XCTAssertEqual(raw.comment, "")
+    }
+
+    func testDXSpiderHistoryLineAllowsAdjacentSpotterMarker() throws {
+        let raw = try XCTUnwrap(ClusterLineParser.parse(
+            "14247.5 K3RWN/ALL   11-Oct-2026 0013Z Heard in EL87 73s W4MBM via PO<W4MBM>",
+            clusterID: UUID(),
+            clusterName: "ShackCQ"
+        ))
+        XCTAssertEqual(raw.callsign, "K3RWN/ALL")
+        XCTAssertEqual(raw.spotter, "W4MBM")
+        XCTAssertEqual(raw.comment, "Heard in EL87 73s W4MBM via PO")
+    }
+
     func testBandModeAndSourceInferenceMatchOM0RXRules() {
         XCTAssertEqual(SpotLogic.band(for: 14074), "20m")
         XCTAssertEqual(SpotLogic.mode(comment: "TNX FT8", band: "20m", khz: 14074), "FT8")
@@ -59,9 +100,14 @@ final class SpotLogicTests: XCTestCase {
         let settings = try JSONDecoder().decode(AppSettings.self, from: legacy)
         XCTAssertTrue(settings.requestSkimmerSpots)
         XCTAssertFalse(settings.showWorkedBandModeSpots)
+        XCTAssertTrue(settings.transferSpotNoteToRUMlog)
         XCTAssertTrue(settings.rigCtlModeEnabled)
         XCTAssertEqual(settings.rigCtlHost, "127.0.0.1")
         XCTAssertEqual(settings.rigCtlPort, 14532)
+    }
+
+    func testRUMlogNoteEscapesAppleScriptMetacharactersAndControls() {
+        XCTAssertEqual(RUMlogController.appleScriptString("CQ \"DX\"\\path\nnext\tline"), "CQ \\\"DX\\\"\\\\path next line")
     }
 
     func testSpotModesMapToRadioModes() {

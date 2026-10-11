@@ -32,7 +32,7 @@ The app runs beside RUMlogNG during live operating. The operator scans a dense t
 - Read a user-selected RUMlog `.rlog` via SQLite `READONLY` and `PRAGMA query_only=ON`; never modify it.
 - Match the established call/DXCC status names, colors, special rules, bands, modes, scoring, and worked-before behavior.
 - Show complete previous-contact details and a populated band/mode matrix.
-- Send callsign, operating mode, logging frequency, and radio tuning frequency to RUMlogNG through its Apple-event interface.
+- Send callsign, operating mode, logging frequency, radio tuning frequency, and optionally the cleaned spot comment as the QSO note to RUMlogNG through its Apple-event interface.
 - Store cluster passwords in Keychain rather than preferences.
 - Target macOS 13 or newer.
 - Live RF tuning, RUMlog auto-rotation, and cluster authentication require the operator's installed applications, hardware, settings, and network.

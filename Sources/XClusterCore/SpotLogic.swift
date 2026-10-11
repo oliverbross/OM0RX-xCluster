@@ -110,27 +110,55 @@ public enum SpotLogic {
 }
 
 public enum ClusterLineParser {
-    private static let expression = try! NSRegularExpression(pattern: #"^DX de\s+(\S+):\s+(\d+(?:\.\d+)?)\s+([A-Z0-9/]+)\s*(.*)$"#, options: [.caseInsensitive])
+    private static let liveExpression = try! NSRegularExpression(
+        pattern: #"^DX de\s+(\S+):\s+(\d+(?:\.\d+)?)\s+([A-Z0-9][A-Z0-9/-]*)\s*(.*)$"#,
+        options: [.caseInsensitive]
+    )
+    private static let historyExpression = try! NSRegularExpression(
+        pattern: #"^\s*(\d+(?:\.\d+)?)\s+([A-Z0-9][A-Z0-9/-]*)\s+(\d{1,2}-[A-Z]{3}-\d{4})\s+((?:[01]\d|2[0-3])[0-5]\d)Z(?:\s+(.*?))?\s*<([^<>]+)>\s*$"#,
+        options: [.caseInsensitive]
+    )
 
     public static func parse(_ line: String, clusterID: UUID, clusterName: String, at date: Date = Date()) -> RawSpot? {
         let cleaned = line.unicodeScalars.filter { $0.value >= 0x20 && $0.value != 0x7f }.map(String.init).joined()
         let range = NSRange(cleaned.startIndex..<cleaned.endIndex, in: cleaned)
-        guard let match = expression.firstMatch(in: cleaned, range: range), match.numberOfRanges == 5,
+        if let match = liveExpression.firstMatch(in: cleaned, range: range), match.numberOfRanges == 5,
               let spotterRange = Range(match.range(at: 1), in: cleaned),
               let frequencyRange = Range(match.range(at: 2), in: cleaned),
               let callRange = Range(match.range(at: 3), in: cleaned),
+              let frequency = Double(cleaned[frequencyRange]) {
+            let commentRange = Range(match.range(at: 4), in: cleaned)
+            let rawComment = commentRange.map { String(cleaned[$0]).trimmingCharacters(in: .whitespaces) } ?? ""
+            let comment = rawComment.replacingOccurrences(
+                of: #"(?:^|\s)(?:[01]\d|2[0-3])[0-5]\dZ\s*$"#,
+                with: "",
+                options: [.regularExpression, .caseInsensitive]
+            ).trimmingCharacters(in: .whitespaces)
+            return RawSpot(clusterID: clusterID, clusterName: clusterName, spotter: String(cleaned[spotterRange]),
+                           frequencyKHz: frequency, frequencyText: String(cleaned[frequencyRange]),
+                           callsign: String(cleaned[callRange]).uppercased(),
+                           comment: comment,
+                           receivedAt: date)
+        }
+
+        guard let match = historyExpression.firstMatch(in: cleaned, range: range), match.numberOfRanges == 7,
+              let frequencyRange = Range(match.range(at: 1), in: cleaned),
+              let callRange = Range(match.range(at: 2), in: cleaned),
+              let dayRange = Range(match.range(at: 3), in: cleaned),
+              let timeRange = Range(match.range(at: 4), in: cleaned),
+              let spotterRange = Range(match.range(at: 6), in: cleaned),
               let frequency = Double(cleaned[frequencyRange]) else { return nil }
-        let commentRange = Range(match.range(at: 4), in: cleaned)
-        let rawComment = commentRange.map { String(cleaned[$0]).trimmingCharacters(in: .whitespaces) } ?? ""
-        let comment = rawComment.replacingOccurrences(
-            of: #"(?:^|\s)(?:[01]\d|2[0-3])[0-5]\dZ\s*$"#,
-            with: "",
-            options: [.regularExpression, .caseInsensitive]
-        ).trimmingCharacters(in: .whitespaces)
-        return RawSpot(clusterID: clusterID, clusterName: clusterName, spotter: String(cleaned[spotterRange]),
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "d-MMM-yyyy HHmm'Z'"
+        formatter.isLenient = false
+        guard let receivedAt = formatter.date(from: "\(cleaned[dayRange]) \(cleaned[timeRange])Z") else { return nil }
+        let commentRange = Range(match.range(at: 5), in: cleaned)
+        let comment = commentRange.map { String(cleaned[$0]).trimmingCharacters(in: .whitespaces) } ?? ""
+        return RawSpot(clusterID: clusterID, clusterName: clusterName,
+                       spotter: String(cleaned[spotterRange]).trimmingCharacters(in: .whitespaces),
                        frequencyKHz: frequency, frequencyText: String(cleaned[frequencyRange]),
-                       callsign: String(cleaned[callRange]).uppercased(),
-                       comment: comment,
-                       receivedAt: date)
+                       callsign: String(cleaned[callRange]).uppercased(), comment: comment, receivedAt: receivedAt)
     }
 }

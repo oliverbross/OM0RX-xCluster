@@ -58,6 +58,8 @@ struct SettingsView: View {
             }
             Section("RUMlogNG control") {
                 Text("Clicking a spot sends callsign, mode, log frequency and TX frequency through RUMlogNG's Apple-event interface. macOS will ask for Automation permission on first use.").font(.caption).foregroundStyle(Theme.secondary)
+                Toggle("Transfer the spot comment to RUMlogNG's Note field", isOn: $model.settings.transferSpotNoteToRUMlog)
+                Text("Uses the cleaned Comment shown in the spots table. Turn this off if you prefer to keep the Note field empty.").font(.caption).foregroundStyle(Theme.secondary)
                 Toggle("Set the radio mode through OM0RX-xCat / RigCtlD", isOn: $model.settings.rigCtlModeEnabled)
                 HStack {
                     labeled("RigCtlD host", TextField("127.0.0.1", text: $model.settings.rigCtlHost).frame(width: 180))

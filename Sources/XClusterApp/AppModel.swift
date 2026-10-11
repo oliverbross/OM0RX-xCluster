@@ -202,7 +202,8 @@ final class AppModel: ObservableObject {
 
     func tune(_ spot: DXSpot) {
         do {
-            try RUMlogController().send(callsign: spot.callsign, frequencyKHz: spot.frequencyKHz, mode: spot.mode)
+            try RUMlogController().send(callsign: spot.callsign, frequencyKHz: spot.frequencyKHz, mode: spot.mode,
+                                        note: settings.transferSpotNoteToRUMlog ? spot.comment : nil)
             let baseMessage = "Sent \(spot.callsign) · \(String(format: "%.6f", spot.frequencyKHz / 1000)) MHz to RUMlogNG"
             lastAction = baseMessage
             guard settings.rigCtlModeEnabled else { return }

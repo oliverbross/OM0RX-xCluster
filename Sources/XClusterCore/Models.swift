@@ -138,6 +138,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var reconnect: Bool
     public var requestSkimmerSpots: Bool
     public var showWorkedBandModeSpots: Bool
+    public var transferSpotNoteToRUMlog: Bool
     public var rigCtlModeEnabled: Bool
     public var rigCtlHost: String
     public var rigCtlPort: Int
@@ -151,6 +152,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         reconnect: true,
         requestSkimmerSpots: true,
         showWorkedBandModeSpots: false,
+        transferSpotNoteToRUMlog: true,
         rigCtlModeEnabled: true,
         rigCtlHost: "127.0.0.1",
         rigCtlPort: 14532,
@@ -169,12 +171,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     )
 
     private enum CodingKeys: String, CodingKey {
-        case clusters, logbookPath, maximumSpots, reconnect, requestSkimmerSpots, showWorkedBandModeSpots
+        case clusters, logbookPath, maximumSpots, reconnect, requestSkimmerSpots, showWorkedBandModeSpots, transferSpotNoteToRUMlog
         case rigCtlModeEnabled, rigCtlHost, rigCtlPort, statusPalette, specialRules
     }
 
     public init(clusters: [ClusterServer], logbookPath: String, maximumSpots: Int, reconnect: Bool,
                 requestSkimmerSpots: Bool, showWorkedBandModeSpots: Bool,
+                transferSpotNoteToRUMlog: Bool,
                 rigCtlModeEnabled: Bool, rigCtlHost: String, rigCtlPort: Int,
                 statusPalette: StatusPalette, specialRules: [SpecialRule]) {
         self.clusters = clusters
@@ -183,6 +186,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.reconnect = reconnect
         self.requestSkimmerSpots = requestSkimmerSpots
         self.showWorkedBandModeSpots = showWorkedBandModeSpots
+        self.transferSpotNoteToRUMlog = transferSpotNoteToRUMlog
         self.rigCtlModeEnabled = rigCtlModeEnabled
         self.rigCtlHost = rigCtlHost
         self.rigCtlPort = rigCtlPort
@@ -199,6 +203,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         reconnect = try values.decodeIfPresent(Bool.self, forKey: .reconnect) ?? defaults.reconnect
         requestSkimmerSpots = try values.decodeIfPresent(Bool.self, forKey: .requestSkimmerSpots) ?? true
         showWorkedBandModeSpots = try values.decodeIfPresent(Bool.self, forKey: .showWorkedBandModeSpots) ?? false
+        transferSpotNoteToRUMlog = try values.decodeIfPresent(Bool.self, forKey: .transferSpotNoteToRUMlog) ?? true
         rigCtlModeEnabled = try values.decodeIfPresent(Bool.self, forKey: .rigCtlModeEnabled) ?? true
         rigCtlHost = try values.decodeIfPresent(String.self, forKey: .rigCtlHost) ?? "127.0.0.1"
         rigCtlPort = try values.decodeIfPresent(Int.self, forKey: .rigCtlPort) ?? 14532
@@ -214,6 +219,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         try values.encode(reconnect, forKey: .reconnect)
         try values.encode(requestSkimmerSpots, forKey: .requestSkimmerSpots)
         try values.encode(showWorkedBandModeSpots, forKey: .showWorkedBandModeSpots)
+        try values.encode(transferSpotNoteToRUMlog, forKey: .transferSpotNoteToRUMlog)
         try values.encode(rigCtlModeEnabled, forKey: .rigCtlModeEnabled)
         try values.encode(rigCtlHost, forKey: .rigCtlHost)
         try values.encode(rigCtlPort, forKey: .rigCtlPort)

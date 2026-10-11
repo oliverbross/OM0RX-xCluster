@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3 — 2026-10-11
+
+- Loads compact DXSpider history rows returned by commands such as `sh/dx/50`
+  into the spots table, preserving each spot's original UTC time and spotter.
+- Clarifies the table counter as **shown** versus total **loaded**, since active
+  filters and the worked band/mode setting can intentionally hide loaded spots.
+- Adds a default-on option to transfer the cleaned spot comment into RUMlogNG's
+  logging `Note` field whenever a spot is selected.
+
 ## 0.1.2 — 2026-10-11
 
 - Adds a cluster-command console beside the RUMlog contact count, with one/all-cluster targeting, useful read-only presets, custom commands, and copyable responses.

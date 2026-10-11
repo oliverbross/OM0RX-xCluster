@@ -16,7 +16,7 @@ A native macOS DX-cluster client for **Oliver Bross OM0RX**. It connects to one 
 - Configurable, human-readable multi-match special-station rules (POTA, SOTA, IOTA, WWFF, bunkers, castles, lighthouses, contests, and IARU by default), with optional expert patterns.
 - Direct `.rlog` access using SQLite `READONLY` plus `PRAGMA query_only=ON`; the app never writes to the RUMlog database.
 - Previous-QSO sheet with callsign history, independently colored LoTW upload/download arrows, DXCC/grid summary, and a country-wide DXCC band/mode matrix (orange worked, green confirmed, dash untouched).
-- One-click RUMlogNG Apple-event handoff from every row area except the callsign, which opens Previous QSOs.
+- One-click RUMlogNG Apple-event handoff from every row area except the callsign, which opens Previous QSOs; the cleaned spot comment can also populate RUMlogNG's Note field.
 - Optional OM0RX-xCat/RigCtlD mode handoff on `127.0.0.1:14532`, so the radio changes mode as well as frequency.
 - Exact callsign/band/mode combinations already worked are hidden by default; a setting restores them without hiding new-band or new-mode opportunities.
 - Cluster passwords stored in macOS Keychain.

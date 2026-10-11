@@ -10,10 +10,10 @@
     <key>CFBundleDisplayName</key><string>OM0RX-xCluster</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.1.2</string>
-    <key>CFBundleVersion</key><string>3</string>
+    <key>CFBundleShortVersionString</key><string>0.1.3</string>
+    <key>CFBundleVersion</key><string>4</string>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
-    <key>NSAppleEventsUsageDescription</key><string>Sends the selected callsign, mode, and frequency to RUMlogNG so it can tune the radio and drive the configured rotator.</string>
+    <key>NSAppleEventsUsageDescription</key><string>Sends the selected callsign, mode, frequency, and optional spot note to RUMlogNG so it can tune the radio and drive the configured rotator.</string>
     <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Oliver Bross OM0RX. GPL-3.0-only.</string>
     <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict>

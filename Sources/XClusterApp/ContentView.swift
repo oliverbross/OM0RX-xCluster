@@ -43,7 +43,8 @@ struct ContentView: View {
                 ClusterCommandPanel().environmentObject(model)
             }
             Spacer()
-            Text("\(model.filteredSpots.count) shown · \(model.spots.count) live").foregroundStyle(Theme.secondary).monospacedDigit()
+            Text("\(min(model.filteredSpots.count, model.settings.maximumSpots)) shown · \(model.spots.count) loaded")
+                .foregroundStyle(Theme.secondary).monospacedDigit()
             Button { model.reconnectClusters() } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.plain).help("Reconnect all clusters")
             Button { model.showingSettings = true } label: { Image(systemName: "gearshape") }.buttonStyle(.plain).help("Settings")
         }
