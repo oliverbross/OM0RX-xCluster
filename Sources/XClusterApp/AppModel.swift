@@ -39,7 +39,7 @@ final class AppModel: ObservableObject {
     @Published var connectionStates: [UUID: ConnectionState] = [:]
     @Published var connectionErrors: [UUID: String] = [:]
     @Published var logbook = LogbookIndex.empty
-    @Published var logbookStatus = "Choose a RUMlog logbook"
+    @Published var logbookStatus = "Waiting for OM0RX-xLog"
     @Published var lastAction = "Ready"
     @Published var isLoadingLogbook = false
     @Published var showingSettings = false
@@ -149,9 +149,8 @@ final class AppModel: ObservableObject {
     }
 
     func reloadLogbook(force: Bool) {
-        guard !settings.logbookPath.isEmpty else { logbookStatus = "Choose a RUMlog logbook"; return }
+        guard let url = activeLogbookURL else { logbookStatus = "Choose a RUMlog logbook"; return }
         guard !isLoadingLogbook else { return }
-        let url = URL(fileURLWithPath: settings.logbookPath)
         let signature = logbookSignature(for: url)
         guard force || signature != lastLogbookSignature else { return }
         isLoadingLogbook = true; logbookStatus = "Reading \(url.lastPathComponent)…"
@@ -174,12 +173,21 @@ final class AppModel: ObservableObject {
                 reclassifyVisibleSpots()
                 lastLogbookSignature = logbookSignature(for: url)
                 logbookStatus = "\(index.recordCount.formatted()) contacts · read-only"
-                if !newlyLogged.isEmpty { lastAction = "Removed \(newlyLogged.sorted().joined(separator: ", ")) after RUMlog logged the contact" }
+                if !newlyLogged.isEmpty { lastAction = "Removed \(newlyLogged.sorted().joined(separator: ", ")) after the contact was logged" }
             } else {
-                logbookStatus = outcome.1 ?? "Could not read the RUMlog logbook."
+                logbookStatus = outcome.1 ?? "Could not read the selected logbook."
             }
             isLoadingLogbook = false
         }
+    }
+
+    private var activeLogbookURL: URL? {
+        if settings.logbookSource == .xLog {
+            guard let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+            return support.appendingPathComponent("OM0RX-xLog/OM0RX-xLog.sqlite")
+        }
+        guard !settings.logbookPath.isEmpty else { return nil }
+        return URL(fileURLWithPath: settings.logbookPath)
     }
 
     func receive(_ raw: RawSpot) {
@@ -202,8 +210,13 @@ final class AppModel: ObservableObject {
 
     func tune(_ spot: DXSpot) {
         do {
-            try RUMlogController().send(callsign: spot.callsign, frequencyKHz: spot.frequencyKHz, mode: spot.mode,
-                                        note: settings.transferSpotNoteToRUMlog ? spot.comment : nil)
+            let note = settings.transferSpotNoteToRUMlog ? spot.comment : nil
+            if settings.spotHandoffTarget == .xLog {
+                try XLogController().send(callsign: spot.callsign, frequencyKHz: spot.frequencyKHz, mode: spot.mode, note: note)
+                lastAction = "Sent \(spot.callsign) · \(String(format: "%.6f", spot.frequencyKHz / 1000)) MHz to OM0RX-xLog"
+                return
+            }
+            try RUMlogController().send(callsign: spot.callsign, frequencyKHz: spot.frequencyKHz, mode: spot.mode, note: note)
             let baseMessage = "Sent \(spot.callsign) · \(String(format: "%.6f", spot.frequencyKHz / 1000)) MHz to RUMlogNG"
             lastAction = baseMessage
             guard settings.rigCtlModeEnabled else { return }

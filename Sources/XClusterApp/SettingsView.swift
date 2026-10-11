@@ -43,9 +43,16 @@ struct SettingsView: View {
 
     private var general: some View {
         Form {
-            Section("RUMlog logbook") {
-                HStack { TextField("Choose a .rlog file", text: $model.settings.logbookPath); Button("Choose…") { model.chooseLogbook() } }
-                Text("The file is opened with SQLite READONLY and query_only. xCluster never writes to the RUMlog database.").font(.caption).foregroundStyle(Theme.secondary)
+            Section("Logbook source") {
+                Picker("Classify spots against", selection: $model.settings.logbookSource) {
+                    ForEach(LogbookSource.allCases) { source in Text(source.rawValue).tag(source) }
+                }.frame(width: 300)
+                if model.settings.logbookSource == .rumlog {
+                    HStack { TextField("Choose a .rlog file", text: $model.settings.logbookPath); Button("Choose…") { model.chooseLogbook() } }
+                } else {
+                    Text("~/Library/Application Support/OM0RX-xLog/OM0RX-xLog.sqlite").font(.system(.caption, design: .monospaced))
+                }
+                Text("The selected SQLite file is opened READONLY with query_only. xCluster never writes to either logbook.").font(.caption).foregroundStyle(Theme.secondary)
                 HStack { Text(model.logbookStatus); Spacer(); Button("Reload now") { model.reloadLogbook(force: true) } }
             }
             Section("Live table") {
@@ -56,18 +63,27 @@ struct SettingsView: View {
                 Text("Sends set/skimmer after login (or unset/skimmer when disabled). The Sources filter then separates RBN reports from ordinary cluster spots.").font(.caption).foregroundStyle(Theme.secondary)
                 Toggle("Reconnect clusters automatically", isOn: $model.settings.reconnect)
             }
-            Section("RUMlogNG control") {
-                Text("Clicking a spot sends callsign, mode, log frequency and TX frequency through RUMlogNG's Apple-event interface. macOS will ask for Automation permission on first use.").font(.caption).foregroundStyle(Theme.secondary)
-                Toggle("Transfer the spot comment to RUMlogNG's Note field", isOn: $model.settings.transferSpotNoteToRUMlog)
-                Text("Uses the cleaned Comment shown in the spots table. Turn this off if you prefer to keep the Note field empty.").font(.caption).foregroundStyle(Theme.secondary)
+            Section("Spot handoff") {
+                Picker("Open spots in", selection: $model.settings.spotHandoffTarget) {
+                    ForEach(SpotHandoffTarget.allCases) { target in Text(target.rawValue).tag(target) }
+                }.frame(width: 280)
+                Text(model.settings.spotHandoffTarget == .xLog
+                     ? "Clicking a row opens the contact in OM0RX-xLog and xLog asks OM0RX-xCat to tune frequency and mode."
+                     : "Clicking a row sends callsign, mode, log frequency and TX frequency through RUMlogNG's Apple-event interface.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+                Toggle("Transfer the spot comment to the logging note", isOn: $model.settings.transferSpotNoteToRUMlog)
+                Text("Uses the cleaned Comment shown in the spots table. Turn this off if you prefer to keep the logging note empty.").font(.caption).foregroundStyle(Theme.secondary)
                 Toggle("Set the radio mode through OM0RX-xCat / RigCtlD", isOn: $model.settings.rigCtlModeEnabled)
                 HStack {
                     labeled("RigCtlD host", TextField("127.0.0.1", text: $model.settings.rigCtlHost).frame(width: 180))
                     labeled("Port", TextField("14532", value: $model.settings.rigCtlPort, format: .number).frame(width: 90))
                     Spacer()
                 }
-                .disabled(!model.settings.rigCtlModeEnabled)
-                Text("RUMlog's Apple-event interface tunes frequency but does not command the radio mode. This optional localhost handoff sets CW, USB/LSB, RTTY or DIGU directly after RUMlog receives the spot.").font(.caption).foregroundStyle(Theme.secondary)
+                .disabled(!model.settings.rigCtlModeEnabled || model.settings.spotHandoffTarget == .xLog)
+                Text(model.settings.spotHandoffTarget == .xLog
+                     ? "xLog performs the complete xCat handoff; these fallback controls apply only when RUMlogNG is selected."
+                     : "RUMlog's Apple-event interface tunes frequency but does not command the radio mode. This optional localhost handoff sets the mode after RUMlog receives the spot.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
             }
         }.formStyle(.grouped).scrollContentBackground(.hidden)
     }

@@ -44,23 +44,24 @@ public struct LogbookIndex: Sendable {
         guard sqlite3_exec(database, "PRAGMA query_only=ON", nil, nil, nil) == SQLITE_OK else {
             throw LogbookError.query(String(cString: sqlite3_errmsg(database)))
         }
+        let records = try hasTable(database, name: "qsos")
+            ? loadXLogRecords(database)
+            : loadRUMlogRecords(database)
+        return build(records: records, url: url)
+    }
+
+    private static func loadRUMlogRecords(_ database: OpaquePointer) throws -> [QSORecord] {
         let sql = "SELECT id, datetime, callsign, band, qrg, mode, rsttx, rstrx, qsl, lotwqsl, eqsl, dxcc, cq, itu, cnt, note, locator, dxccadif FROM logbook ORDER BY datetime DESC, id DESC"
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
             throw LogbookError.query(String(cString: sqlite3_errmsg(database)))
         }
         defer { sqlite3_finalize(statement) }
-
-        var byCall: [String: [QSORecord]] = [:]
-        var byADIF: [Int: [QSORecord]] = [:]
-        var callBands: [String: Set<String>] = [:], callModes: [String: Set<String>] = [:]
-        var workedCallBandModes = Set<String>(), confirmedCallBandModes = Set<String>(), dxccBands: [Int: Set<String>] = [:], dxccModes: [Int: Set<String>] = [:]
-        var workedDXCC = Set<Int>(), confirmedDXCC = Set<Int>(), confirmedDXCCBandModes = Set<String>()
         let dateFormatter = DateFormatter()
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
         dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
         dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        var count = 0
+        var records: [QSORecord] = []
         while sqlite3_step(statement) == SQLITE_ROW {
             let rawCall = text(statement, 2).removingPercentEncoding ?? text(statement, 2)
             let call = rawCall.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
@@ -74,27 +75,114 @@ public struct LogbookIndex: Sendable {
                                    countryPrefix: text(statement, 11), cqZone: text(statement, 12), ituZone: text(statement, 13),
                                    continent: text(statement, 14).uppercased(), note: text(statement, 15).removingPercentEncoding ?? text(statement, 15),
                                    grid: text(statement, 16).uppercased(), adif: Int(sqlite3_column_int(statement, 17)))
-            byCall[call, default: []].append(record)
-            callBands[call, default: []].insert(band)
-            callModes[call, default: []].insert(mode)
-            workedCallBandModes.insert(key(call, band, mode))
-            if record.isConfirmed { confirmedCallBandModes.insert(key(call, band, mode)) }
-            if record.adif > 0 {
-                byADIF[record.adif, default: []].append(record)
-                workedDXCC.insert(record.adif); dxccBands[record.adif, default: []].insert(band); dxccModes[record.adif, default: []].insert(mode)
-                if record.isConfirmed { confirmedDXCC.insert(record.adif); confirmedDXCCBandModes.insert(key(String(record.adif), band, mode)) }
-            }
-            count += 1
+            records.append(record)
         }
         guard sqlite3_errcode(database) == SQLITE_OK || sqlite3_errcode(database) == SQLITE_DONE else {
             throw LogbookError.query(String(cString: sqlite3_errmsg(database)))
         }
+        return records
+    }
+
+    private struct XLogStoredQSO: Decodable {
+        var call: String
+        var start: Date
+        var band: String
+        var mode: String
+        var submode: String
+        var frequencyHz: Int64?
+        var rstSent: String
+        var rstReceived: String
+        var gridSquare: String
+        var country: String
+        var dxcc: Int?
+        var continent: String
+        var cqZone: String
+        var ituZone: String
+        var comment: String
+        var notes: String
+        var qslReceived: String
+        var lotwReceived: String
+    }
+
+    private static func loadXLogRecords(_ database: OpaquePointer) throws -> [QSORecord] {
+        var statement: OpaquePointer?
+        let sql = "SELECT rowid, record_json FROM qsos WHERE deleted_at IS NULL ORDER BY qso_start DESC"
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            throw LogbookError.query(String(cString: sqlite3_errmsg(database)))
+        }
+        defer { sqlite3_finalize(statement) }
+        let decoder = JSONDecoder()
+        var records: [QSORecord] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            guard let bytes = sqlite3_column_blob(statement, 1) else { continue }
+            let data = Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 1)))
+            guard let value = try? decoder.decode(XLogStoredQSO.self, from: data) else { continue }
+            records.append(QSORecord(
+                id: sqlite3_column_int64(statement, 0),
+                date: value.start,
+                callsign: value.call.uppercased(),
+                band: value.band.lowercased(),
+                frequencyKHz: Double(value.frequencyHz ?? 0) / 1_000,
+                mode: SpotLogic.normalizedMode(value.submode.isEmpty ? value.mode : value.submode),
+                rstSent: value.rstSent,
+                rstReceived: value.rstReceived,
+                paperQSL: value.qslReceived,
+                lotwQSL: value.lotwReceived,
+                eqsl: "",
+                countryPrefix: value.country,
+                cqZone: value.cqZone,
+                ituZone: value.ituZone,
+                continent: value.continent.uppercased(),
+                note: value.comment.isEmpty ? value.notes : value.comment,
+                grid: value.gridSquare.uppercased(),
+                adif: value.dxcc ?? 0
+            ))
+        }
+        guard sqlite3_errcode(database) == SQLITE_OK || sqlite3_errcode(database) == SQLITE_DONE else {
+            throw LogbookError.query(String(cString: sqlite3_errmsg(database)))
+        }
+        return records
+    }
+
+    private static func build(records: [QSORecord], url: URL) -> LogbookIndex {
+        var byCall: [String: [QSORecord]] = [:]
+        var byADIF: [Int: [QSORecord]] = [:]
+        var callBands: [String: Set<String>] = [:], callModes: [String: Set<String>] = [:]
+        var workedCallBandModes = Set<String>(), confirmedCallBandModes = Set<String>(), dxccBands: [Int: Set<String>] = [:], dxccModes: [Int: Set<String>] = [:]
+        var workedDXCC = Set<Int>(), confirmedDXCC = Set<Int>(), confirmedDXCCBandModes = Set<String>()
+        for record in records {
+            let call = record.callsign
+            byCall[call, default: []].append(record)
+            callBands[call, default: []].insert(record.band)
+            callModes[call, default: []].insert(record.mode)
+            workedCallBandModes.insert(key(call, record.band, record.mode))
+            if record.isConfirmed { confirmedCallBandModes.insert(key(call, record.band, record.mode)) }
+            if record.adif > 0 {
+                byADIF[record.adif, default: []].append(record)
+                workedDXCC.insert(record.adif)
+                dxccBands[record.adif, default: []].insert(record.band)
+                dxccModes[record.adif, default: []].insert(record.mode)
+                if record.isConfirmed {
+                    confirmedDXCC.insert(record.adif)
+                    confirmedDXCCBandModes.insert(key(String(record.adif), record.band, record.mode))
+                }
+            }
+        }
         let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
-        return LogbookIndex(loadedAt: Date(), modifiedAt: attributes?[.modificationDate] as? Date, recordCount: count,
+        return LogbookIndex(loadedAt: Date(), modifiedAt: attributes?[.modificationDate] as? Date, recordCount: records.count,
                             recordsByCall: byCall, recordsByADIF: byADIF, callBands: callBands, callModes: callModes,
                             workedCallBandModes: workedCallBandModes, confirmedCallBandModes: confirmedCallBandModes,
                             dxccBands: dxccBands, dxccModes: dxccModes,
                             workedDXCC: workedDXCC, confirmedDXCC: confirmedDXCC, confirmedDXCCBandModes: confirmedDXCCBandModes)
+    }
+
+    private static func hasTable(_ database: OpaquePointer, name: String) throws -> Bool {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1", -1, &statement, nil) == SQLITE_OK,
+              let statement else { throw LogbookError.query(String(cString: sqlite3_errmsg(database))) }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, name, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        return sqlite3_step(statement) == SQLITE_ROW
     }
 
     public func classify(call: String, band: String, mode: String, adif: Int?) -> (String, String, Date?) {

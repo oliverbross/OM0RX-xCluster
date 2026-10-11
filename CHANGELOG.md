@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.5 — 2026-10-11
+
+- Makes OM0RX-xLog the default spot handoff while retaining RUMlogNG as a
+  selectable compatibility target.
+- Reads the OM0RX-xLog SQLite database directly in strict read-only mode for
+  callsign, band, mode, DXCC and confirmation classification.
+- Sends callsign, frequency, mode and cleaned spot comment through the
+  `om0rx-xlog://spot` contract; xLog then tunes frequency and mode through xCat.
+- Adds explicit settings for the logbook source and spot destination.
+
 ## 0.1.4 — 2026-10-11
 
 - Adds distinct, compact colour treatments for every band and mode in the live

@@ -148,14 +148,28 @@ public struct StatusPalette: Codable, Equatable, Sendable {
     ])
 }
 
+public enum SpotHandoffTarget: String, Codable, CaseIterable, Identifiable, Sendable {
+    case xLog = "OM0RX-xLog"
+    case rumlog = "RUMlogNG"
+    public var id: String { rawValue }
+}
+
+public enum LogbookSource: String, Codable, CaseIterable, Identifiable, Sendable {
+    case xLog = "OM0RX-xLog"
+    case rumlog = "RUMlogNG"
+    public var id: String { rawValue }
+}
+
 public struct AppSettings: Codable, Equatable, Sendable {
     public var clusters: [ClusterServer]
     public var logbookPath: String
+    public var logbookSource: LogbookSource
     public var maximumSpots: Int
     public var reconnect: Bool
     public var requestSkimmerSpots: Bool
     public var showWorkedBandModeSpots: Bool
     public var transferSpotNoteToRUMlog: Bool
+    public var spotHandoffTarget: SpotHandoffTarget
     public var rigCtlModeEnabled: Bool
     public var rigCtlHost: String
     public var rigCtlPort: Int
@@ -167,11 +181,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public static let defaults = AppSettings(
         clusters: [ClusterServer(name: "ShackCQ", host: "cluster.shackcq.com", port: 7300, callsign: "OM0RX-12")],
         logbookPath: "",
+        logbookSource: .xLog,
         maximumSpots: 200,
         reconnect: true,
         requestSkimmerSpots: true,
         showWorkedBandModeSpots: false,
         transferSpotNoteToRUMlog: true,
+        spotHandoffTarget: .xLog,
         rigCtlModeEnabled: true,
         rigCtlHost: "127.0.0.1",
         rigCtlPort: 14532,
@@ -192,23 +208,25 @@ public struct AppSettings: Codable, Equatable, Sendable {
     )
 
     private enum CodingKeys: String, CodingKey {
-        case clusters, logbookPath, maximumSpots, reconnect, requestSkimmerSpots, showWorkedBandModeSpots, transferSpotNoteToRUMlog
+        case clusters, logbookPath, logbookSource, maximumSpots, reconnect, requestSkimmerSpots, showWorkedBandModeSpots, transferSpotNoteToRUMlog, spotHandoffTarget
         case rigCtlModeEnabled, rigCtlHost, rigCtlPort, statusPalette, bandPalette, modePalette, specialRules
     }
 
-    public init(clusters: [ClusterServer], logbookPath: String, maximumSpots: Int, reconnect: Bool,
+    public init(clusters: [ClusterServer], logbookPath: String, logbookSource: LogbookSource = .xLog, maximumSpots: Int, reconnect: Bool,
                 requestSkimmerSpots: Bool, showWorkedBandModeSpots: Bool,
-                transferSpotNoteToRUMlog: Bool,
+                transferSpotNoteToRUMlog: Bool, spotHandoffTarget: SpotHandoffTarget = .xLog,
                 rigCtlModeEnabled: Bool, rigCtlHost: String, rigCtlPort: Int,
                 statusPalette: StatusPalette, bandPalette: StatusPalette, modePalette: StatusPalette,
                 specialRules: [SpecialRule]) {
         self.clusters = clusters
         self.logbookPath = logbookPath
+        self.logbookSource = logbookSource
         self.maximumSpots = maximumSpots
         self.reconnect = reconnect
         self.requestSkimmerSpots = requestSkimmerSpots
         self.showWorkedBandModeSpots = showWorkedBandModeSpots
         self.transferSpotNoteToRUMlog = transferSpotNoteToRUMlog
+        self.spotHandoffTarget = spotHandoffTarget
         self.rigCtlModeEnabled = rigCtlModeEnabled
         self.rigCtlHost = rigCtlHost
         self.rigCtlPort = rigCtlPort
@@ -223,11 +241,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
         let defaults = Self.defaults
         clusters = try values.decodeIfPresent([ClusterServer].self, forKey: .clusters) ?? defaults.clusters
         logbookPath = try values.decodeIfPresent(String.self, forKey: .logbookPath) ?? defaults.logbookPath
+        logbookSource = try values.decodeIfPresent(LogbookSource.self, forKey: .logbookSource) ?? .xLog
         maximumSpots = try values.decodeIfPresent(Int.self, forKey: .maximumSpots) ?? defaults.maximumSpots
         reconnect = try values.decodeIfPresent(Bool.self, forKey: .reconnect) ?? defaults.reconnect
         requestSkimmerSpots = try values.decodeIfPresent(Bool.self, forKey: .requestSkimmerSpots) ?? true
         showWorkedBandModeSpots = try values.decodeIfPresent(Bool.self, forKey: .showWorkedBandModeSpots) ?? false
         transferSpotNoteToRUMlog = try values.decodeIfPresent(Bool.self, forKey: .transferSpotNoteToRUMlog) ?? true
+        spotHandoffTarget = try values.decodeIfPresent(SpotHandoffTarget.self, forKey: .spotHandoffTarget) ?? .xLog
         rigCtlModeEnabled = try values.decodeIfPresent(Bool.self, forKey: .rigCtlModeEnabled) ?? true
         rigCtlHost = try values.decodeIfPresent(String.self, forKey: .rigCtlHost) ?? "127.0.0.1"
         rigCtlPort = try values.decodeIfPresent(Int.self, forKey: .rigCtlPort) ?? 14532
@@ -241,11 +261,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
         var values = encoder.container(keyedBy: CodingKeys.self)
         try values.encode(clusters, forKey: .clusters)
         try values.encode(logbookPath, forKey: .logbookPath)
+        try values.encode(logbookSource, forKey: .logbookSource)
         try values.encode(maximumSpots, forKey: .maximumSpots)
         try values.encode(reconnect, forKey: .reconnect)
         try values.encode(requestSkimmerSpots, forKey: .requestSkimmerSpots)
         try values.encode(showWorkedBandModeSpots, forKey: .showWorkedBandModeSpots)
         try values.encode(transferSpotNoteToRUMlog, forKey: .transferSpotNoteToRUMlog)
+        try values.encode(spotHandoffTarget, forKey: .spotHandoffTarget)
         try values.encode(rigCtlModeEnabled, forKey: .rigCtlModeEnabled)
         try values.encode(rigCtlHost, forKey: .rigCtlHost)
         try values.encode(rigCtlPort, forKey: .rigCtlPort)
