@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.4 — 2026-10-11
+
+- Adds distinct, compact colour treatments for every band and mode in the live
+  spots table while preserving the text label for quick, accessible scanning.
+- Adds configurable Band and Mode palettes to the Colours settings alongside
+  the existing Call and DXCC status colours, with one action to restore all
+  OM0RX defaults.
+- Migrates existing settings automatically so current users receive the new
+  palettes without losing their configured status colours.
+
 ## 0.1.3 — 2026-10-11
 
 - Loads compact DXSpider history rows returned by commands such as `sh/dx/50`

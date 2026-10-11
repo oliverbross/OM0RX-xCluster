@@ -226,6 +226,12 @@ final class AppModel: ObservableObject {
     func clearFilters() { filter = SpotFilter() }
 
     func color(for status: String) -> Color { Color(hex: settings.statusPalette.colors[status] ?? "#B0B0B0") }
+    func color(forBand band: String) -> Color {
+        Color(hex: settings.bandPalette.colors[band] ?? settings.bandPalette.colors["Unknown"] ?? "#B0B0B0")
+    }
+    func color(forMode mode: String) -> Color {
+        Color(hex: settings.modePalette.colors[mode] ?? settings.modePalette.colors["Unknown"] ?? "#B0B0B0")
+    }
 
     private func reclassifyVisibleSpots() {
         for index in spots.indices {

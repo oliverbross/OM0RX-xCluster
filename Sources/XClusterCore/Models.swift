@@ -129,6 +129,23 @@ public struct StatusPalette: Codable, Equatable, Sendable {
         "W/New Mode": "#FFA726", "W/New Band+Mode": "#FF5722", "Worked": "#B0B0B0",
         "Confirmed": "#10B981", "Unknown": "#777F8C",
     ])
+
+    public static let bandDefaults = StatusPalette(colors: [
+        "160m": "#B794F4", "80m": "#A78BFA", "60m": "#818CF8",
+        "40m": "#4A9EFF", "30m": "#22D3EE", "20m": "#12D6A0",
+        "17m": "#4ADE80", "15m": "#F3B23C", "12m": "#FB923C",
+        "10m": "#FF6B5E", "6m": "#F472B6", "2m": "#E879F9",
+        "70cm": "#C084FC", "Unknown": "#B0B0B0",
+    ])
+
+    public static let modeDefaults = StatusPalette(colors: [
+        "CW": "#F3B23C", "SSB": "#35C8F5", "AM": "#FFD166",
+        "FM": "#4A9EFF", "RTTY": "#FB923C", "FT8": "#A78BFA",
+        "FT4": "#F472B6", "FT2": "#E879F9", "PSK": "#4ADE80",
+        "OLIVIA": "#2DD4BF", "JT65": "#818CF8", "JT9": "#60A5FA",
+        "HELL": "#F59E0B", "MFSK": "#34D399", "SSTV": "#F87171",
+        "DIGI": "#8B9CFF", "Unknown": "#B0B0B0",
+    ])
 }
 
 public struct AppSettings: Codable, Equatable, Sendable {
@@ -143,6 +160,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var rigCtlHost: String
     public var rigCtlPort: Int
     public var statusPalette: StatusPalette
+    public var bandPalette: StatusPalette
+    public var modePalette: StatusPalette
     public var specialRules: [SpecialRule]
 
     public static let defaults = AppSettings(
@@ -157,6 +176,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         rigCtlHost: "127.0.0.1",
         rigCtlPort: 14532,
         statusPalette: .defaults,
+        bandPalette: .bandDefaults,
+        modePalette: .modeDefaults,
         specialRules: [
             SpecialRule(name: "POTA", keywords: ["POTA"], referenceFormat: .pota),
             SpecialRule(name: "SOTA", keywords: ["SOTA"], referenceFormat: .sota),
@@ -172,14 +193,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case clusters, logbookPath, maximumSpots, reconnect, requestSkimmerSpots, showWorkedBandModeSpots, transferSpotNoteToRUMlog
-        case rigCtlModeEnabled, rigCtlHost, rigCtlPort, statusPalette, specialRules
+        case rigCtlModeEnabled, rigCtlHost, rigCtlPort, statusPalette, bandPalette, modePalette, specialRules
     }
 
     public init(clusters: [ClusterServer], logbookPath: String, maximumSpots: Int, reconnect: Bool,
                 requestSkimmerSpots: Bool, showWorkedBandModeSpots: Bool,
                 transferSpotNoteToRUMlog: Bool,
                 rigCtlModeEnabled: Bool, rigCtlHost: String, rigCtlPort: Int,
-                statusPalette: StatusPalette, specialRules: [SpecialRule]) {
+                statusPalette: StatusPalette, bandPalette: StatusPalette, modePalette: StatusPalette,
+                specialRules: [SpecialRule]) {
         self.clusters = clusters
         self.logbookPath = logbookPath
         self.maximumSpots = maximumSpots
@@ -191,6 +213,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.rigCtlHost = rigCtlHost
         self.rigCtlPort = rigCtlPort
         self.statusPalette = statusPalette
+        self.bandPalette = bandPalette
+        self.modePalette = modePalette
         self.specialRules = specialRules
     }
 
@@ -208,6 +232,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         rigCtlHost = try values.decodeIfPresent(String.self, forKey: .rigCtlHost) ?? "127.0.0.1"
         rigCtlPort = try values.decodeIfPresent(Int.self, forKey: .rigCtlPort) ?? 14532
         statusPalette = try values.decodeIfPresent(StatusPalette.self, forKey: .statusPalette) ?? defaults.statusPalette
+        bandPalette = try values.decodeIfPresent(StatusPalette.self, forKey: .bandPalette) ?? defaults.bandPalette
+        modePalette = try values.decodeIfPresent(StatusPalette.self, forKey: .modePalette) ?? defaults.modePalette
         specialRules = try values.decodeIfPresent([SpecialRule].self, forKey: .specialRules) ?? defaults.specialRules
     }
 
@@ -224,6 +250,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         try values.encode(rigCtlHost, forKey: .rigCtlHost)
         try values.encode(rigCtlPort, forKey: .rigCtlPort)
         try values.encode(statusPalette, forKey: .statusPalette)
+        try values.encode(bandPalette, forKey: .bandPalette)
+        try values.encode(modePalette, forKey: .modePalette)
         try values.encode(specialRules, forKey: .specialRules)
     }
 }

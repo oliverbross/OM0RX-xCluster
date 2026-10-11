@@ -104,6 +104,8 @@ final class SpotLogicTests: XCTestCase {
         XCTAssertTrue(settings.rigCtlModeEnabled)
         XCTAssertEqual(settings.rigCtlHost, "127.0.0.1")
         XCTAssertEqual(settings.rigCtlPort, 14532)
+        XCTAssertEqual(settings.bandPalette, .bandDefaults)
+        XCTAssertEqual(settings.modePalette, .modeDefaults)
     }
 
     func testRUMlogNoteEscapesAppleScriptMetacharactersAndControls() {

@@ -14,7 +14,7 @@ struct SettingsView: View {
                 Picker("Settings section", selection: $selectedTab) {
                     Label("General", systemImage: "slider.horizontal.3").tag("General")
                     Label("Clusters", systemImage: "antenna.radiowaves.left.and.right").tag("Clusters")
-                    Label("Status Colours", systemImage: "paintpalette").tag("Colours")
+                    Label("Colours", systemImage: "paintpalette").tag("Colours")
                     Label("Specials", systemImage: "star").tag("Specials")
                 }.pickerStyle(.segmented)
                 Button { dismiss() } label: { Image(systemName: "xmark").font(.headline) }
@@ -101,13 +101,58 @@ struct SettingsView: View {
 
     private var colours: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                ForEach(model.settings.statusPalette.colors.keys.sorted(), id: \.self) { key in
-                    HStack { Text(key).fontWeight(.semibold); Spacer(); ColorPicker("", selection: colorBinding(key), supportsOpacity: false).labelsHidden(); Text(model.settings.statusPalette.colors[key] ?? "").font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.secondary) }
-                        .padding(10).background(Theme.surface).clipShape(RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.rule))
+            VStack(alignment: .leading, spacing: 18) {
+                colourSection(
+                    "Call and DXCC status",
+                    help: "Colours used for the evidence-based Call Status and DXCC Status columns.",
+                    keys: model.settings.statusPalette.colors.keys.sorted(),
+                    palette: $model.settings.statusPalette
+                )
+                colourSection(
+                    "Bands",
+                    help: "Each amateur band keeps a consistent colour in the live spots table.",
+                    keys: ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm", "Unknown"],
+                    palette: $model.settings.bandPalette
+                )
+                colourSection(
+                    "Modes",
+                    help: "Modes remain readable as text and gain a configurable colour cue.",
+                    keys: ["CW", "SSB", "AM", "FM", "RTTY", "FT8", "FT4", "FT2", "PSK", "OLIVIA", "JT65", "JT9", "HELL", "MFSK", "SSTV", "DIGI", "Unknown"],
+                    palette: $model.settings.modePalette
+                )
+                HStack {
+                    Button("Restore all OM0RX defaults") {
+                        model.settings.statusPalette = .defaults
+                        model.settings.bandPalette = .bandDefaults
+                        model.settings.modePalette = .modeDefaults
+                    }
+                    Spacer()
                 }
-            }.padding(16)
-            HStack { Button("Restore OM0RX defaults") { model.settings.statusPalette = .defaults }; Spacer() }.padding(.horizontal, 16)
+            }
+            .padding(16)
+        }
+    }
+
+    private func colourSection(_ title: String, help: String, keys: [String], palette: Binding<StatusPalette>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.headline)
+            Text(help).font(.caption).foregroundStyle(Theme.secondary)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ForEach(keys, id: \.self) { key in
+                    HStack {
+                        Text(key).fontWeight(.semibold)
+                        Spacer()
+                        ColorPicker("Choose the colour for \(key)", selection: colorBinding(key, palette: palette), supportsOpacity: false).labelsHidden()
+                        Text(palette.wrappedValue.colors[key] ?? "")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(Theme.secondary)
+                    }
+                    .padding(10)
+                    .background(Theme.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.rule))
+                }
+            }
         }
     }
 
@@ -162,7 +207,12 @@ struct SettingsView: View {
 
     private func passwordBinding(_ id: UUID) -> Binding<String> { Binding(get: { passwords[id] ?? "" }, set: { passwords[id] = $0 }) }
 
-    private func colorBinding(_ key: String) -> Binding<Color> { Binding(get: { Color(hex: model.settings.statusPalette.colors[key] ?? "#B0B0B0") }, set: { model.settings.statusPalette.colors[key] = NSColor($0).hexRGB }) }
+    private func colorBinding(_ key: String, palette: Binding<StatusPalette>) -> Binding<Color> {
+        Binding(
+            get: { Color(hex: palette.wrappedValue.colors[key] ?? "#B0B0B0") },
+            set: { palette.wrappedValue.colors[key] = NSColor($0).hexRGB }
+        )
+    }
 
     private func addCluster() {
         let server = ClusterServer(name: "New cluster", host: "", port: 7300, callsign: model.settings.clusters.first?.callsign ?? "OM0RX", enabled: true)

@@ -356,14 +356,14 @@ private struct SpotTable: View {
                 HStack(spacing: 0) {
                     cell(spot.receivedAt.formatted(date: .omitted, time: .standard), 78).monospacedDigit()
                     scoreBadge(spot.score)
-                    cell(spot.band, 52, weight: .bold)
+                    categoryCell(spot.band, 52, color: model.color(forBand: spot.band))
                     cell(String(format: "%.6f", spot.frequencyKHz / 1000), 90, color: Color(hex: "#4A9EFF")).monospacedDigit()
                 }
             }.buttonStyle(.plain).help("Tune this spot in RUMlogNG")
             Button(spot.callsign) { model.historySpot = spot }.buttonStyle(.plain).fontWeight(.bold).foregroundStyle(Color(hex: "#10B981")).frame(width: 92, alignment: .leading).padding(.horizontal, 6).help("Show previous QSOs")
             Button { tune(spot) } label: {
                 HStack(spacing: 0) {
-                    cell(spot.mode, 64)
+                    categoryCell(spot.mode, 64, color: model.color(forMode: spot.mode))
                     cell(spot.country?.name.capitalized ?? "Unknown", 150, color: Color(hex: "#CCCCCC"))
                     cell(spot.country.map { String($0.cqZone) } ?? "–", 38)
                     cell(spot.aggregateCount > 1 ? "\(spot.spotter) +\(spot.aggregateCount - 1)" : spot.spotter, 92, color: Color(hex: "#CCCCCC"))
@@ -383,6 +383,20 @@ private struct SpotTable: View {
 
     private func cell(_ value: String, _ width: CGFloat, color: Color = Theme.text, weight: Font.Weight = .regular) -> some View {
         Text(value).font(.system(size: 12, weight: weight)).lineLimit(1).truncationMode(.tail).frame(width: width, alignment: .leading).padding(.horizontal, 6).foregroundStyle(color)
+    }
+
+    private func categoryCell(_ value: String, _ width: CGFloat, color: Color) -> some View {
+        Text(value)
+            .font(.system(size: 11, weight: .bold))
+            .lineLimit(1)
+            .foregroundStyle(color)
+            .padding(.horizontal, 5)
+            .frame(height: 20)
+            .background(color.opacity(0.15))
+            .overlay(RoundedRectangle(cornerRadius: 4).stroke(color.opacity(0.42), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .frame(width: width, alignment: .leading)
+            .padding(.horizontal, 6)
     }
 
     private func scoreBadge(_ score: Int) -> some View {
