@@ -19,6 +19,7 @@ public struct LogbookIndex: Sendable {
     private let recordsByCall: [String: [QSORecord]]
     private let callBands: [String: Set<String>]
     private let callModes: [String: Set<String>]
+    private let workedCallBandModes: Set<String>
     private let confirmedCallBandModes: Set<String>
     private let dxccBands: [Int: Set<String>]
     private let dxccModes: [Int: Set<String>]
@@ -26,7 +27,7 @@ public struct LogbookIndex: Sendable {
     private let confirmedDXCC: Set<Int>
     private let confirmedDXCCBandModes: Set<String>
 
-    public static let empty = LogbookIndex(loadedAt: .distantPast, modifiedAt: nil, recordCount: 0, recordsByCall: [:], callBands: [:], callModes: [:], confirmedCallBandModes: [], dxccBands: [:], dxccModes: [:], workedDXCC: [], confirmedDXCC: [], confirmedDXCCBandModes: [])
+    public static let empty = LogbookIndex(loadedAt: .distantPast, modifiedAt: nil, recordCount: 0, recordsByCall: [:], callBands: [:], callModes: [:], workedCallBandModes: [], confirmedCallBandModes: [], dxccBands: [:], dxccModes: [:], workedDXCC: [], confirmedDXCC: [], confirmedDXCCBandModes: [])
 
     public static func load(url: URL) throws -> LogbookIndex {
         guard FileManager.default.fileExists(atPath: url.path) else { throw LogbookError.missing(url.path) }
@@ -51,7 +52,7 @@ public struct LogbookIndex: Sendable {
 
         var byCall: [String: [QSORecord]] = [:]
         var callBands: [String: Set<String>] = [:], callModes: [String: Set<String>] = [:]
-        var confirmedCallBandModes = Set<String>(), dxccBands: [Int: Set<String>] = [:], dxccModes: [Int: Set<String>] = [:]
+        var workedCallBandModes = Set<String>(), confirmedCallBandModes = Set<String>(), dxccBands: [Int: Set<String>] = [:], dxccModes: [Int: Set<String>] = [:]
         var workedDXCC = Set<Int>(), confirmedDXCC = Set<Int>(), confirmedDXCCBandModes = Set<String>()
         let dateFormatter = DateFormatter()
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
@@ -59,8 +60,10 @@ public struct LogbookIndex: Sendable {
         dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         var count = 0
         while sqlite3_step(statement) == SQLITE_ROW {
-            let call = text(statement, 2).removingPercentEncoding?.uppercased() ?? text(statement, 2).uppercased()
-            let band = text(statement, 3).lowercased(), mode = SpotLogic.normalizedMode(text(statement, 5))
+            let rawCall = text(statement, 2).removingPercentEncoding ?? text(statement, 2)
+            let call = rawCall.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            let band = text(statement, 3).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let mode = SpotLogic.normalizedMode(text(statement, 5))
             let date = dateFormatter.date(from: text(statement, 1)) ?? .distantPast
             let record = QSORecord(id: sqlite3_column_int64(statement, 0), date: date, callsign: call, band: band,
                                    frequencyKHz: Double(text(statement, 4).replacingOccurrences(of: ",", with: ".")) ?? 0,
@@ -72,6 +75,7 @@ public struct LogbookIndex: Sendable {
             byCall[call, default: []].append(record)
             callBands[call, default: []].insert(band)
             callModes[call, default: []].insert(mode)
+            workedCallBandModes.insert(key(call, band, mode))
             if record.isConfirmed { confirmedCallBandModes.insert(key(call, band, mode)) }
             if record.adif > 0 {
                 workedDXCC.insert(record.adif); dxccBands[record.adif, default: []].insert(band); dxccModes[record.adif, default: []].insert(mode)
@@ -85,33 +89,48 @@ public struct LogbookIndex: Sendable {
         let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
         return LogbookIndex(loadedAt: Date(), modifiedAt: attributes?[.modificationDate] as? Date, recordCount: count,
                             recordsByCall: byCall, callBands: callBands, callModes: callModes,
-                            confirmedCallBandModes: confirmedCallBandModes, dxccBands: dxccBands, dxccModes: dxccModes,
+                            workedCallBandModes: workedCallBandModes, confirmedCallBandModes: confirmedCallBandModes,
+                            dxccBands: dxccBands, dxccModes: dxccModes,
                             workedDXCC: workedDXCC, confirmedDXCC: confirmedDXCC, confirmedDXCCBandModes: confirmedDXCCBandModes)
     }
 
     public func classify(call: String, band: String, mode: String, adif: Int?) -> (String, String, Date?) {
-        let normalizedCall = call.uppercased(), normalizedBand = band.lowercased(), normalizedMode = SpotLogic.normalizedMode(mode)
+        let normalizedCall = call.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let normalizedBand = band.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedMode = SpotLogic.normalizedMode(mode)
         let histories = recordsByCall[normalizedCall] ?? []
+        let bandWorked = callBands[normalizedCall]?.contains(normalizedBand) ?? false
+        let modeWorked = callModes[normalizedCall]?.contains(normalizedMode) ?? false
+        let bandModeKey = Self.key(normalizedCall, normalizedBand, normalizedMode)
         let callStatus = SpotLogic.callStatus(
             worked: !histories.isEmpty,
-            newBand: !(callBands[normalizedCall]?.contains(normalizedBand) ?? false),
-            newMode: !(callModes[normalizedCall]?.contains(normalizedMode) ?? false),
-            confirmedBandMode: confirmedCallBandModes.contains(Self.key(normalizedCall, normalizedBand, normalizedMode))
+            bandWorked: bandWorked,
+            modeWorked: modeWorked,
+            bandModeWorked: workedCallBandModes.contains(bandModeKey),
+            confirmedBandMode: confirmedCallBandModes.contains(bandModeKey)
         )
-        guard let adif, adif > 0 else { return (callStatus, "Unknown", histories.first?.date) }
+        let workedBefore = Self.workedBeforeDate(records: histories, band: normalizedBand, mode: normalizedMode)
+        guard let adif, adif > 0 else { return (callStatus, "Unknown", workedBefore) }
         let dxccStatus = SpotLogic.dxccStatus(
             worked: workedDXCC.contains(adif), confirmed: confirmedDXCC.contains(adif),
             newBand: !(dxccBands[adif]?.contains(normalizedBand) ?? false),
             newMode: !(dxccModes[adif]?.contains(normalizedMode) ?? false),
             confirmedBandMode: confirmedDXCCBandModes.contains(Self.key(String(adif), normalizedBand, normalizedMode))
         )
-        let exact = histories.first(where: { $0.band == normalizedBand && $0.mode == normalizedMode })?.date
-        return (callStatus, dxccStatus, exact)
+        return (callStatus, dxccStatus, workedBefore)
     }
 
     public func history(call: String, country: CountryInfo?) -> HistorySummary {
-        let records = recordsByCall[call.uppercased()] ?? []
+        let normalizedCall = call.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let records = recordsByCall[normalizedCall] ?? []
         return HistorySummary(records: records, country: country, grid: records.first(where: { !$0.grid.isEmpty })?.grid ?? "")
+    }
+
+    static func workedBeforeDate(records: [QSORecord], band: String, mode: String) -> Date? {
+        let normalizedBand = band.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedMode = SpotLogic.normalizedMode(mode)
+        return records.first(where: { $0.band == normalizedBand && $0.mode == normalizedMode })?.date
+            ?? records.first(where: { $0.band == normalizedBand })?.date
     }
 
     private static func key(_ first: String, _ band: String, _ mode: String) -> String { "\(first)|\(band.lowercased())|\(SpotLogic.normalizedMode(mode))" }

@@ -2,6 +2,10 @@
 
 ## 0.1.1 — 2026-10-11
 
+- Fixes Worked b4 dates when a callsign was worked on the same band in a
+  different mode, while keeping genuinely new-band rows blank.
+- Corrects Call Status so a mode is considered new within the selected band;
+  a worked band with an unworked band/mode combination is now New Mode.
 - Adds unmistakable top and bottom controls for closing the Settings sheet.
 - Restores the Vue spot-table palette, including status text, row tints, score
   badges, frequencies, callsigns, worked dates, and per-programme special badges.

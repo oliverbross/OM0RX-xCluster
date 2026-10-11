@@ -41,7 +41,7 @@ public enum SpotLogic {
     }
 
     public static func normalizedMode(_ mode: String) -> String {
-        let value = mode.uppercased()
+        let value = mode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         return ["USB", "LSB", "PHONE", "PH"].contains(value) ? "SSB" : value
     }
 
@@ -69,6 +69,16 @@ public enum SpotLogic {
         if newBand { return "New Band" }
         if newMode { return "New Mode" }
         return "Worked"
+    }
+
+    public static func callStatus(worked: Bool, bandWorked: Bool, modeWorked: Bool,
+                                  bandModeWorked: Bool, confirmedBandMode: Bool) -> String {
+        let newBand = !bandWorked
+        // Once the band has been worked, "new mode" means this mode is new on
+        // this band. On a new band, retain the OM0RX New Band+Mode distinction
+        // only when the mode itself has never been worked for this callsign.
+        let newMode = bandWorked ? !bandModeWorked : !modeWorked
+        return callStatus(worked: worked, newBand: newBand, newMode: newMode, confirmedBandMode: confirmedBandMode)
     }
 
     public static func dxccStatus(worked: Bool, confirmed: Bool, newBand: Bool, newMode: Bool, confirmedBandMode: Bool) -> String {

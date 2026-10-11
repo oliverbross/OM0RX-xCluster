@@ -27,6 +27,10 @@ let package = Package(
                 .linkedFramework("SwiftUI"),
             ]
         ),
-        .testTarget(name: "XClusterCoreTests", dependencies: ["XClusterCore"]),
+        .testTarget(
+            name: "XClusterCoreTests",
+            dependencies: ["XClusterCore"],
+            linkerSettings: [.linkedLibrary("sqlite3")]
+        ),
     ]
 )
