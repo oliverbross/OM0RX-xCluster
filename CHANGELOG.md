@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.6 — 2026-10-11
+
+- Publishes an atomic, local-only live spot snapshot for OM0RX-xLog band maps.
+- Preserves xCluster callsign, DXCC, band and mode colour values in the shared contract.
+- Includes country-centroid coordinates so xLog can place current DX on its world map.
+- Includes detected special badges in xLog handoff URLs so activation references can be stored in structured ADIF fields.
+- Publishes the filtered, sorted and display-limited spot view so xLog maps follow every active xCluster filter.
+- Sends raw activation references separately from the optional human-readable note, so disabling note transfer cannot discard structured award data.
+
 ## 0.1.5 — 2026-10-11
 
 - Makes OM0RX-xLog the default spot handoff while retaining RUMlogNG as a

@@ -114,14 +114,16 @@ final class SpotLogicTests: XCTestCase {
     }
 
     func testXLogSpotURLCarriesFrequencyModeAndNote() throws {
-        let url = try XLogController().url(callsign: "RG1L/MM", frequencyKHz: 14_006.5, mode: "CW", note: "DX test")
+        let url = try XLogController().url(callsign: "RG1L/MM", frequencyKHz: 14_006.5, mode: "CW", note: nil, referenceText: "POTA K-1234", specialTags: ["POTA"])
         let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
         let values = Dictionary(uniqueKeysWithValues: components.queryItems?.compactMap { item in item.value.map { (item.name, $0) } } ?? [])
         XCTAssertEqual(components.scheme, "om0rx-xlog")
+        XCTAssertEqual(components.queryItems?.first(where: { $0.name == "special" })?.value, "POTA")
         XCTAssertEqual(values["call"], "RG1L/MM")
         XCTAssertEqual(values["frequency"], "14006.500")
         XCTAssertEqual(values["mode"], "CW")
-        XCTAssertEqual(values["comment"], "DX test")
+        XCTAssertNil(values["comment"])
+        XCTAssertEqual(values["references"], "POTA K-1234")
     }
 
     func testSpotModesMapToRadioModes() {

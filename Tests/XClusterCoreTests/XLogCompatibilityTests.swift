@@ -20,7 +20,7 @@ final class XLogCompatibilityTests: XCTestCase {
         let stored = Stored(
             call: "VK4JAZ", start: Date(timeIntervalSince1970: 1_700_000_000), band: "20m", mode: "SSB",
             submode: "", frequencyHz: 14_302_500, rstSent: "59", rstReceived: "59", gridSquare: "QG62",
-            country: "Australia", dxcc: 150, continent: "OC", cqZone: "30", ituZone: "55",
+            country: "", dxcc: nil, continent: "", cqZone: "", ituZone: "",
             comment: "test", notes: "", qslReceived: "", lotwReceived: "Y"
         )
         let data = try JSONEncoder().encode(stored)
@@ -54,7 +54,7 @@ final class XLogCompatibilityTests: XCTestCase {
     private struct Stored: Encodable {
         var call: String; var start: Date; var band: String; var mode: String; var submode: String
         var frequencyHz: Int64; var rstSent: String; var rstReceived: String; var gridSquare: String
-        var country: String; var dxcc: Int; var continent: String; var cqZone: String; var ituZone: String
+        var country: String; var dxcc: Int?; var continent: String; var cqZone: String; var ituZone: String
         var comment: String; var notes: String; var qslReceived: String; var lotwReceived: String
     }
 }

@@ -17,12 +17,12 @@ public struct XLogController: Sendable {
     public init() {}
 
     @MainActor
-    public func send(callsign: String, frequencyKHz: Double, mode: String, note: String? = nil) throws {
-        let url = try url(callsign: callsign, frequencyKHz: frequencyKHz, mode: mode, note: note)
+    public func send(callsign: String, frequencyKHz: Double, mode: String, note: String? = nil, referenceText: String? = nil, specialTags: [String] = []) throws {
+        let url = try url(callsign: callsign, frequencyKHz: frequencyKHz, mode: mode, note: note, referenceText: referenceText, specialTags: specialTags)
         guard NSWorkspace.shared.open(url) else { throw XLogControlError.unavailable }
     }
 
-    public func url(callsign: String, frequencyKHz: Double, mode: String, note: String? = nil) throws -> URL {
+    public func url(callsign: String, frequencyKHz: Double, mode: String, note: String? = nil, referenceText: String? = nil, specialTags: [String] = []) throws -> URL {
         guard callsign.range(of: #"^[A-Z0-9/]{2,16}$"#, options: .regularExpression) != nil,
               frequencyKHz > 0, frequencyKHz < 100_000_000,
               mode.range(of: #"^[A-Z0-9]{1,12}$"#, options: .regularExpression) != nil else {
@@ -37,6 +37,8 @@ public struct XLogController: Sendable {
             URLQueryItem(name: "mode", value: mode),
         ]
         if let note, !note.isEmpty { components.queryItems?.append(URLQueryItem(name: "comment", value: note)) }
+        if let referenceText, !referenceText.isEmpty { components.queryItems?.append(URLQueryItem(name: "references", value: referenceText)) }
+        if !specialTags.isEmpty { components.queryItems?.append(URLQueryItem(name: "special", value: specialTags.joined(separator: ","))) }
         guard let url = components.url else { throw XLogControlError.unavailable }
         return url
     }

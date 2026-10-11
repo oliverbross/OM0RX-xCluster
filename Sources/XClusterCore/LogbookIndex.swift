@@ -5,9 +5,9 @@ public enum LogbookError: Error, LocalizedError {
     case missing(String), open(String), query(String)
     public var errorDescription: String? {
         switch self {
-        case .missing(let path): return "RUMlog logbook not found at \(path)."
-        case .open(let message): return "Could not open the RUMlog logbook read-only: \(message)"
-        case .query(let message): return "Could not read the RUMlog logbook: \(message)"
+        case .missing(let path): return "Logbook not found at \(path)."
+        case .open(let message): return "Could not open the logbook read-only: \(message)"
+        case .query(let message): return "Could not read the logbook: \(message)"
         }
     }
 }
@@ -112,11 +112,13 @@ public struct LogbookIndex: Sendable {
         }
         defer { sqlite3_finalize(statement) }
         let decoder = JSONDecoder()
+        let resolver = try? CTYResolver.bundled()
         var records: [QSORecord] = []
         while sqlite3_step(statement) == SQLITE_ROW {
             guard let bytes = sqlite3_column_blob(statement, 1) else { continue }
             let data = Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 1)))
             guard let value = try? decoder.decode(XLogStoredQSO.self, from: data) else { continue }
+            let resolvedCountry = resolver?.resolve(value.call)
             records.append(QSORecord(
                 id: sqlite3_column_int64(statement, 0),
                 date: value.start,
@@ -129,13 +131,13 @@ public struct LogbookIndex: Sendable {
                 paperQSL: value.qslReceived,
                 lotwQSL: value.lotwReceived,
                 eqsl: "",
-                countryPrefix: value.country,
-                cqZone: value.cqZone,
-                ituZone: value.ituZone,
-                continent: value.continent.uppercased(),
+                countryPrefix: value.country.isEmpty ? resolvedCountry?.name ?? "" : value.country,
+                cqZone: value.cqZone.isEmpty ? resolvedCountry.map { String($0.cqZone) } ?? "" : value.cqZone,
+                ituZone: value.ituZone.isEmpty ? resolvedCountry.map { String($0.ituZone) } ?? "" : value.ituZone,
+                continent: value.continent.isEmpty ? resolvedCountry?.continent ?? "" : value.continent.uppercased(),
                 note: value.comment.isEmpty ? value.notes : value.comment,
                 grid: value.gridSquare.uppercased(),
-                adif: value.dxcc ?? 0
+                adif: value.dxcc ?? resolvedCountry?.adif ?? 0
             ))
         }
         guard sqlite3_errcode(database) == SQLITE_OK || sqlite3_errcode(database) == SQLITE_DONE else {

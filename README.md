@@ -20,6 +20,8 @@ A native macOS DX-cluster client for **Oliver Bross OM0RX**. It connects to one 
 - Direct OM0RX-xLog and `.rlog` access using SQLite `READONLY` plus `PRAGMA query_only=ON`; the app never writes to either database.
 - Previous-QSO sheet with callsign history, independently colored LoTW upload/download arrows, DXCC/grid summary, and a country-wide DXCC band/mode matrix (orange worked, green confirmed, dash untouched).
 - One-click OM0RX-xLog handoff from every row area except the callsign, which opens Previous QSOs. RUMlogNG remains a selectable compatibility target.
+- The xLog handoff includes every detected special badge; xLog promotes recognized POTA, SOTA, IOTA, WWFF and castle references from the spot into structured ADIF fields.
+- An atomic local-only classified snapshot feeds xLog's Operator Desk, world map and unlimited band maps while preserving the exact xCluster filters, sort order, maximum count, status, band and mode colours.
 - Optional OM0RX-xCat/RigCtlD mode handoff on `127.0.0.1:14532`, so the radio changes mode as well as frequency.
 - Exact callsign/band/mode combinations already worked are hidden by default; a setting restores them without hiding new-band or new-mode opportunities.
 - Cluster passwords stored in macOS Keychain.
@@ -42,6 +44,10 @@ The packaged app is written to `dist/OM0RX-xCluster.app`. The packaging script u
 4. In Settings → Colours, adjust the Call/DXCC, Band, or Mode palettes if desired.
 5. Click a callsign to inspect previous QSOs. Click elsewhere on its row to open the spot in OM0RX-xLog.
 6. If RUMlogNG is selected instead, approve the macOS Automation request on first tune.
+
+## OM0RX-xLog map feed
+
+xCluster writes `~/Library/Application Support/OM0RX-xCluster/spots.json` atomically. The snapshot contains the currently visible classified spots after the table's bands, modes, continent, call/DXCC status, special, source, worked-state, search, sort and maximum-count controls have been applied. It also carries country centroids, special badges and the configured semantic colours, but no cluster password. OM0RX-xLog reads this file locally for its map and band-map panels, so no second cluster connection is required and a spot hidden in xCluster is not reintroduced on an xLog map.
 
 ## Safety boundaries
 

@@ -33,7 +33,9 @@ struct ClusterConsoleLine: Identifiable, Sendable {
 final class AppModel: ObservableObject {
     @Published var settings: AppSettings
     @Published var spots: [DXSpot] = []
-    @Published var filter = SpotFilter()
+    @Published var filter = SpotFilter() {
+        didSet { publishSpotSnapshot() }
+    }
     @Published var selectedSpotID: UUID?
     @Published var historySpot: DXSpot?
     @Published var connectionStates: [UUID: ConnectionState] = [:]
@@ -53,6 +55,7 @@ final class AppModel: ObservableObject {
     private var refreshTask: Task<Void, Never>?
     private var lastLogbookSignature: String?
     private var loadedLogbookPath: String?
+    private var snapshotTask: Task<Void, Never>?
 
     init() {
         settings = SettingsStore.shared.load()
@@ -94,6 +97,7 @@ final class AppModel: ObservableObject {
                 self?.reloadLogbook(force: false)
             }
         }
+        publishSpotSnapshot()
     }
 
     func reconnectClusters() {
@@ -139,7 +143,7 @@ final class AppModel: ObservableObject {
     func clearClusterConsole() { clusterConsole.removeAll() }
 
     func saveSettings() {
-        do { try SettingsStore.shared.save(settings); lastAction = "Settings saved"; reconnectClusters(); reloadLogbook(force: true) }
+        do { try SettingsStore.shared.save(settings); lastAction = "Settings saved"; reconnectClusters(); reloadLogbook(force: true); publishSpotSnapshot() }
         catch { lastAction = error.localizedDescription }
     }
 
@@ -169,7 +173,7 @@ final class AppModel: ObservableObject {
                 }) : []
                 logbook = index
                 loadedLogbookPath = standardizedPath
-                if !newlyLogged.isEmpty { spots.removeAll { newlyLogged.contains($0.callsign) } }
+                if !newlyLogged.isEmpty { spots.removeAll { newlyLogged.contains($0.callsign) }; publishSpotSnapshot() }
                 reclassifyVisibleSpots()
                 lastLogbookSignature = logbookSignature(for: url)
                 logbookStatus = "\(index.recordCount.formatted()) contacts · read-only"
@@ -206,13 +210,21 @@ final class AppModel: ObservableObject {
         }
         spots.insert(spot, at: 0)
         if spots.count > max(settings.maximumSpots * 2, 400) { spots.removeLast(spots.count - max(settings.maximumSpots * 2, 400)) }
+        publishSpotSnapshot()
     }
 
     func tune(_ spot: DXSpot) {
         do {
             let note = settings.transferSpotNoteToRUMlog ? spot.comment : nil
             if settings.spotHandoffTarget == .xLog {
-                try XLogController().send(callsign: spot.callsign, frequencyKHz: spot.frequencyKHz, mode: spot.mode, note: note)
+                try XLogController().send(
+                    callsign: spot.callsign,
+                    frequencyKHz: spot.frequencyKHz,
+                    mode: spot.mode,
+                    note: note,
+                    referenceText: spot.comment,
+                    specialTags: spot.specialTags
+                )
                 lastAction = "Sent \(spot.callsign) · \(String(format: "%.6f", spot.frequencyKHz / 1000)) MHz to OM0RX-xLog"
                 return
             }
@@ -238,6 +250,14 @@ final class AppModel: ObservableObject {
     func history(for spot: DXSpot) -> HistorySummary { logbook.history(call: spot.callsign, country: spot.country) }
     func clearFilters() { filter = SpotFilter() }
 
+    func setMaximumSpots(_ count: Int) {
+        guard [50, 100, 200, 500].contains(count), settings.maximumSpots != count else { return }
+        settings.maximumSpots = count
+        do { try SettingsStore.shared.save(settings) }
+        catch { lastAction = error.localizedDescription }
+        publishSpotSnapshot()
+    }
+
     func color(for status: String) -> Color { Color(hex: settings.statusPalette.colors[status] ?? "#B0B0B0") }
     func color(forBand band: String) -> Color {
         Color(hex: settings.bandPalette.colors[band] ?? settings.bandPalette.colors["Unknown"] ?? "#B0B0B0")
@@ -255,6 +275,21 @@ final class AppModel: ObservableObject {
             let score = SpotLogic.score(callStatus: status.0, dxccStatus: status.1, specials: spots[index].specialTags, source: spots[index].source)
             spots[index].score = score.0
             spots[index].scoreReasons = score.1
+        }
+        publishSpotSnapshot()
+    }
+
+    private func publishSpotSnapshot() {
+        snapshotTask?.cancel()
+        let visibleSpots = Array(filteredSpots.prefix(settings.maximumSpots))
+        let snapshot = SharedSpotSnapshot(
+            connectedClusters: connectedCount,
+            spots: visibleSpots.map { SharedClusterSpot(spot: $0, settings: settings) }
+        )
+        snapshotTask = Task.detached(priority: .utility) {
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            try? SpotSnapshotStore.write(snapshot)
         }
     }
 

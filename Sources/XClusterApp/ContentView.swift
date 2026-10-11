@@ -61,7 +61,7 @@ struct ContentView: View {
     private var filterDeck: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                Menu { ForEach([50, 100, 200, 500], id: \.self) { count in Button(count == model.settings.maximumSpots ? "✓ \(count)" : "\(count)") { model.settings.maximumSpots = count } } } label: { FilterLabel(title: "Show: \(model.settings.maximumSpots)", icon: "list.number", active: false, accent: Color(hex: "#659DFF")) }.coloredFilter(accent: Color(hex: "#659DFF"), active: false)
+                Menu { ForEach([50, 100, 200, 500], id: \.self) { count in Button(count == model.settings.maximumSpots ? "✓ \(count)" : "\(count)") { model.setMaximumSpots(count) } } } label: { FilterLabel(title: "Show: \(model.settings.maximumSpots)", icon: "list.number", active: false, accent: Color(hex: "#659DFF")) }.coloredFilter(accent: Color(hex: "#659DFF"), active: false)
                 MultiSelectMenu(title: "Bands", icon: "waveform.path", values: SpotLogic.bands, selection: $model.filter.bands, accent: Theme.cyan)
                 MultiSelectMenu(title: "Modes", icon: "dial.medium", values: SpotLogic.modes, selection: $model.filter.modes, accent: Color(hex: "#A78BFA"))
                 MultiSelectMenu(title: "Continent", icon: "globe.europe.africa", values: ["AF", "AN", "AS", "EU", "NA", "OC", "SA"], selection: $model.filter.continents, accent: Color(hex: "#69D69A"))
@@ -359,7 +359,7 @@ private struct SpotTable: View {
                     categoryCell(spot.band, 52, color: model.color(forBand: spot.band))
                     cell(String(format: "%.6f", spot.frequencyKHz / 1000), 90, color: Color(hex: "#4A9EFF")).monospacedDigit()
                 }
-            }.buttonStyle(.plain).help("Tune this spot in RUMlogNG")
+            }.buttonStyle(.plain).help("Load and tune this spot")
             Button(spot.callsign) { model.historySpot = spot }.buttonStyle(.plain).fontWeight(.bold).foregroundStyle(Color(hex: "#10B981")).frame(width: 92, alignment: .leading).padding(.horizontal, 6).help("Show previous QSOs")
             Button { tune(spot) } label: {
                 HStack(spacing: 0) {
@@ -373,7 +373,7 @@ private struct SpotTable: View {
                     cell(spot.workedBefore.map { "✓ " + $0.formatted(date: .numeric, time: .omitted) } ?? "", 100, color: Theme.confirmed, weight: .medium)
                     cell(spot.comment, 280, color: Color(hex: "#AAAAAA"))
                 }
-            }.buttonStyle(.plain).help("Tune this spot in RUMlogNG")
+            }.buttonStyle(.plain).help("Load and tune this spot")
         }
         .frame(height: 30).background(rowBackground(spot, index: index))
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.rule.opacity(0.45)).frame(height: 1) }
