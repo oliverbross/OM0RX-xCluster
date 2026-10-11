@@ -4,21 +4,33 @@ import Network
 public final class ClusterHub: @unchecked Sendable {
     public typealias SpotHandler = @Sendable (RawSpot) -> Void
     public typealias StateHandler = @Sendable (UUID, ConnectionState, String?) -> Void
+    public typealias LineHandler = @Sendable (UUID, String, String) -> Void
 
     private let lock = NSLock()
     private var connections: [UUID: ClusterConnection] = [:]
 
     public init() {}
 
-    public func start(servers: [ClusterServer], reconnect: Bool, onSpot: @escaping SpotHandler, onState: @escaping StateHandler) {
+    public func start(servers: [ClusterServer], reconnect: Bool, requestSkimmer: Bool,
+                      onSpot: @escaping SpotHandler, onState: @escaping StateHandler,
+                      onLine: @escaping LineHandler = { _, _, _ in }) {
         stop()
         var next: [UUID: ClusterConnection] = [:]
         for server in servers where server.enabled {
-            let connection = ClusterConnection(server: server, password: SettingsStore.shared.password(for: server.id), reconnect: reconnect, onSpot: onSpot, onState: onState)
+            let connection = ClusterConnection(server: server, password: SettingsStore.shared.password(for: server.id),
+                                               reconnect: reconnect, requestSkimmer: requestSkimmer,
+                                               onSpot: onSpot, onState: onState, onLine: onLine)
             next[server.id] = connection
             connection.start()
         }
         lock.lock(); connections = next; lock.unlock()
+    }
+
+    public func send(command: String, to serverIDs: Set<UUID>) {
+        lock.lock()
+        let targets = connections.filter { serverIDs.contains($0.key) }.map(\.value)
+        lock.unlock()
+        targets.forEach { $0.send(command: command) }
     }
 
     public func stop() {
@@ -31,21 +43,34 @@ private final class ClusterConnection: @unchecked Sendable {
     private let server: ClusterServer
     private let password: String
     private let reconnect: Bool
+    private let requestSkimmer: Bool
     private let onSpot: ClusterHub.SpotHandler
     private let onState: ClusterHub.StateHandler
+    private let onLine: ClusterHub.LineHandler
     private let queue: DispatchQueue
     private var connection: NWConnection?
     private var buffer = Data()
     private var stopped = false
     private var retry = 0
 
-    init(server: ClusterServer, password: String, reconnect: Bool, onSpot: @escaping ClusterHub.SpotHandler, onState: @escaping ClusterHub.StateHandler) {
-        self.server = server; self.password = password; self.reconnect = reconnect; self.onSpot = onSpot; self.onState = onState
+    init(server: ClusterServer, password: String, reconnect: Bool, requestSkimmer: Bool,
+         onSpot: @escaping ClusterHub.SpotHandler, onState: @escaping ClusterHub.StateHandler,
+         onLine: @escaping ClusterHub.LineHandler) {
+        self.server = server; self.password = password; self.reconnect = reconnect; self.requestSkimmer = requestSkimmer
+        self.onSpot = onSpot; self.onState = onState; self.onLine = onLine
         queue = DispatchQueue(label: "com.oliverbross.xcluster.\(server.id.uuidString)")
     }
 
     func start() { queue.async { self.connect() } }
     func stop() { queue.async { self.stopped = true; self.connection?.cancel(); self.connection = nil } }
+    func send(command: String) {
+        queue.async { [weak self] in
+            guard let self, !self.stopped, let connection = self.connection else { return }
+            connection.send(content: Data((command + "\r\n").utf8), completion: .contentProcessed { [weak self] error in
+                if let error { self?.queue.async { self?.disconnected(error.localizedDescription) } }
+            })
+        }
+    }
 
     private func connect() {
         guard !stopped, let port = NWEndpoint.Port(rawValue: UInt16(clamping: server.port)) else { return }
@@ -73,6 +98,7 @@ private final class ClusterConnection: @unchecked Sendable {
             guard !stopped else { return }
             var login = server.callsign.uppercased() + "\r\n"
             if !password.isEmpty { login += password + "\r\n" }
+            login += (requestSkimmer ? "set/skimmer" : "unset/skimmer") + "\r\n"
             connection.send(content: Data(login.utf8), completion: .contentProcessed { [weak self] error in
                 if let error { self?.queue.async { self?.disconnected(error.localizedDescription) } }
             })
@@ -97,7 +123,11 @@ private final class ClusterConnection: @unchecked Sendable {
             let lineData = buffer.prefix(upTo: newline)
             buffer.removeSubrange(...newline)
             guard let line = String(data: lineData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !line.isEmpty else { continue }
-            if let spot = ClusterLineParser.parse(line, clusterID: server.id, clusterName: server.name) { onSpot(spot) }
+            if let spot = ClusterLineParser.parse(line, clusterID: server.id, clusterName: server.name) {
+                onSpot(spot)
+            } else {
+                onLine(server.id, server.name, line)
+            }
         }
     }
 

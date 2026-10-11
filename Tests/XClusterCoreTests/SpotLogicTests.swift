@@ -9,11 +9,26 @@ final class SpotLogicTests: XCTestCase {
         XCTAssertEqual(raw.comment, "PA QSO PARTY-CLE")
     }
 
+    func testClusterLineParsingRemovesOnlyTrailingUTCTime() throws {
+        let timestamped = try XCTUnwrap(ClusterLineParser.parse("DX de W2LCQ: 3869.0 N3NTJ PA QSO Party: Mercer 0003Z", clusterID: UUID(), clusterName: "test"))
+        XCTAssertEqual(timestamped.comment, "PA QSO Party: Mercer")
+
+        let timestampOnly = try XCTUnwrap(ClusterLineParser.parse("DX de K3KS: 28460.0 KC3JAS 2359Z", clusterID: UUID(), clusterName: "test"))
+        XCTAssertEqual(timestampOnly.comment, "")
+
+        let meaningfulNumber = try XCTUnwrap(ClusterLineParser.parse("DX de K3KS: 28460.0 KC3JAS POTA K-0003Z", clusterID: UUID(), clusterName: "test"))
+        XCTAssertEqual(meaningfulNumber.comment, "POTA K-0003Z")
+    }
+
     func testBandModeAndSourceInferenceMatchOM0RXRules() {
         XCTAssertEqual(SpotLogic.band(for: 14074), "20m")
         XCTAssertEqual(SpotLogic.mode(comment: "TNX FT8", band: "20m", khz: 14074), "FT8")
         XCTAssertEqual(SpotLogic.mode(comment: "", band: "40m", khz: 7025), "CW")
         XCTAssertEqual(SpotLogic.source(spotter: "DL1ABC-#", comment: "CW 18 dB"), "rbl")
+        XCTAssertEqual(SpotLogic.source(spotter: "DL1ABC/#", comment: "FT8 -12 dB"), "rbl")
+        let rbn = ClusterLineParser.parse("DX de DL1ABC-#: 14027.0 OM0RX 23 dB 28 WPM CQ 1234Z", clusterID: UUID(), clusterName: "test")
+        XCTAssertEqual(rbn.map { SpotLogic.source(spotter: $0.spotter, comment: $0.comment) }, "rbl")
+        XCTAssertEqual(rbn?.comment, "23 dB 28 WPM CQ")
         XCTAssertEqual(SpotLogic.normalizedMode(" usb "), "SSB")
     }
 
@@ -29,6 +44,33 @@ final class SpotLogicTests: XCTestCase {
         XCTAssertEqual(SpotLogic.callStatus(worked: true, bandWorked: false, modeWorked: false, bandModeWorked: false, confirmedBandMode: false), "New Band+Mode")
         XCTAssertEqual(SpotLogic.callStatus(worked: true, bandWorked: true, modeWorked: true, bandModeWorked: true, confirmedBandMode: false), "Worked")
         XCTAssertEqual(SpotLogic.callStatus(worked: true, bandWorked: true, modeWorked: true, bandModeWorked: true, confirmedBandMode: true), "Confirmed")
+    }
+
+    func testWorkedBandModeVisibilityDefaultsToHidden() {
+        XCTAssertFalse(SpotLogic.shouldShow(callStatus: "Worked", showWorkedBandModeSpots: false))
+        XCTAssertFalse(SpotLogic.shouldShow(callStatus: "Confirmed", showWorkedBandModeSpots: false))
+        XCTAssertTrue(SpotLogic.shouldShow(callStatus: "New Mode", showWorkedBandModeSpots: false))
+        XCTAssertTrue(SpotLogic.shouldShow(callStatus: "New Band", showWorkedBandModeSpots: false))
+        XCTAssertTrue(SpotLogic.shouldShow(callStatus: "Worked", showWorkedBandModeSpots: true))
+    }
+
+    func testLegacySettingsEnableSkimmerAndHideWorkedCombinations() throws {
+        let legacy = #"{"clusters":[],"logbookPath":"","maximumSpots":200,"reconnect":true,"statusPalette":{"colors":{}},"specialRules":[]}"#.data(using: .utf8)!
+        let settings = try JSONDecoder().decode(AppSettings.self, from: legacy)
+        XCTAssertTrue(settings.requestSkimmerSpots)
+        XCTAssertFalse(settings.showWorkedBandModeSpots)
+        XCTAssertTrue(settings.rigCtlModeEnabled)
+        XCTAssertEqual(settings.rigCtlHost, "127.0.0.1")
+        XCTAssertEqual(settings.rigCtlPort, 14532)
+    }
+
+    func testSpotModesMapToRadioModes() {
+        XCTAssertEqual(RigCtlModeController.radioMode(for: "SSB", frequencyKHz: 7_125), "LSB")
+        XCTAssertEqual(RigCtlModeController.radioMode(for: "SSB", frequencyKHz: 14_250), "USB")
+        XCTAssertEqual(RigCtlModeController.radioMode(for: "FT8", frequencyKHz: 14_074), "DIGU")
+        XCTAssertEqual(RigCtlModeController.radioMode(for: "FT4", frequencyKHz: 7_047.5), "DIGU")
+        XCTAssertEqual(RigCtlModeController.radioMode(for: "CW", frequencyKHz: 7_025), "CW")
+        XCTAssertEqual(RigCtlModeController.radioMode(for: "RTTY", frequencyKHz: 14_080), "RTTY")
     }
 
     func testSpecialsCanMultiMatch() {

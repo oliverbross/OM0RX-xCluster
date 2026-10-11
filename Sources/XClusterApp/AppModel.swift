@@ -21,6 +21,14 @@ struct SpotFilter {
     var sort: SpotSort = .newest
 }
 
+struct ClusterConsoleLine: Identifiable, Sendable {
+    let id = UUID()
+    let receivedAt: Date
+    let source: String
+    let text: String
+    let isCommand: Bool
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var settings: AppSettings
@@ -35,6 +43,10 @@ final class AppModel: ObservableObject {
     @Published var lastAction = "Ready"
     @Published var isLoadingLogbook = false
     @Published var showingSettings = false
+    @Published var showingClusterCommands = false
+    @Published var clusterCommandTarget: UUID?
+    @Published var customClusterCommand = ""
+    @Published var clusterConsole: [ClusterConsoleLine] = []
 
     private let hub = ClusterHub()
     private let resolver: CTYResolver?
@@ -60,6 +72,7 @@ final class AppModel: ObservableObject {
             (filter.dxccStatuses.isEmpty || filter.dxccStatuses.contains(spot.dxccStatus)) &&
             (filter.specials.isEmpty || !filter.specials.isDisjoint(with: spot.specialTags)) &&
             filter.sources.contains(spot.source) &&
+            SpotLogic.shouldShow(callStatus: spot.callStatus, showWorkedBandModeSpots: settings.showWorkedBandModeSpots) &&
             (filter.worked.isEmpty || filter.worked.contains(spot.workedBefore == nil ? "Not worked" : "Worked before"))
         }
         switch filter.sort {
@@ -85,15 +98,45 @@ final class AppModel: ObservableObject {
 
     func reconnectClusters() {
         connectionStates = Dictionary(uniqueKeysWithValues: settings.clusters.map { ($0.id, .disconnected) })
-        hub.start(servers: settings.clusters, reconnect: settings.reconnect, onSpot: { [weak self] raw in
+        hub.start(servers: settings.clusters, reconnect: settings.reconnect, requestSkimmer: settings.requestSkimmerSpots, onSpot: { [weak self] raw in
             Task { @MainActor in self?.receive(raw) }
         }, onState: { [weak self] id, state, error in
             Task { @MainActor in
                 self?.connectionStates[id] = state
                 if let error { self?.connectionErrors[id] = error } else if state == .connected { self?.connectionErrors[id] = nil }
             }
+        }, onLine: { [weak self] _, name, line in
+            Task { @MainActor in self?.appendClusterLine(source: name, text: line) }
         })
     }
+
+    func sendClusterCommand(_ rawCommand: String) {
+        let command = rawCommand
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        guard !command.isEmpty else { lastAction = "Enter a cluster command first"; return }
+        guard command.count <= 160 else { lastAction = "Cluster commands are limited to 160 characters"; return }
+
+        let connected = Set(connectionStates.compactMap { $0.value == .connected ? $0.key : nil })
+        let targets: Set<UUID>
+        if let target = clusterCommandTarget {
+            targets = connected.contains(target) ? [target] : []
+        } else {
+            targets = connected
+        }
+        guard !targets.isEmpty else { lastAction = "No selected cluster is connected"; return }
+
+        let targetName = clusterCommandTarget.flatMap { id in settings.clusters.first(where: { $0.id == id })?.name } ?? "All connected"
+        clusterConsole.append(ClusterConsoleLine(receivedAt: Date(), source: targetName, text: "> \(command)", isCommand: true))
+        trimClusterConsole()
+        hub.send(command: command, to: targets)
+        customClusterCommand = ""
+        lastAction = "Sent \(command) to \(targetName)"
+    }
+
+    func clearClusterConsole() { clusterConsole.removeAll() }
 
     func saveSettings() {
         do { try SettingsStore.shared.save(settings); lastAction = "Settings saved"; reconnectClusters(); reloadLogbook(force: true) }
@@ -158,7 +201,23 @@ final class AppModel: ObservableObject {
     }
 
     func tune(_ spot: DXSpot) {
-        do { try RUMlogController().send(callsign: spot.callsign, frequencyKHz: spot.frequencyKHz, mode: spot.mode); lastAction = "Sent \(spot.callsign) · \(String(format: "%.6f", spot.frequencyKHz / 1000)) MHz to RUMlogNG" }
+        do {
+            try RUMlogController().send(callsign: spot.callsign, frequencyKHz: spot.frequencyKHz, mode: spot.mode)
+            let baseMessage = "Sent \(spot.callsign) · \(String(format: "%.6f", spot.frequencyKHz / 1000)) MHz to RUMlogNG"
+            lastAction = baseMessage
+            guard settings.rigCtlModeEnabled else { return }
+            let host = settings.rigCtlHost, port = settings.rigCtlPort, frequency = spot.frequencyKHz, mode = spot.mode
+            Task { [weak self] in
+                let result = await Task.detached(priority: .userInitiated) {
+                    Result { try RigCtlModeController(host: host, port: port).setMode(for: mode, frequencyKHz: frequency) }
+                }.value
+                guard let self else { return }
+                switch result {
+                case .success(let radioMode): self.lastAction = "\(baseMessage) · radio mode \(radioMode)"
+                case .failure(let error): self.lastAction = "\(baseMessage) · mode handoff failed: \(error.localizedDescription)"
+                }
+            }
+        }
         catch { lastAction = error.localizedDescription; NSSound.beep() }
     }
 
@@ -177,6 +236,15 @@ final class AppModel: ObservableObject {
             spots[index].score = score.0
             spots[index].scoreReasons = score.1
         }
+    }
+
+    private func appendClusterLine(source: String, text: String) {
+        clusterConsole.append(ClusterConsoleLine(receivedAt: Date(), source: source, text: text, isCommand: false))
+        trimClusterConsole()
+    }
+
+    private func trimClusterConsole() {
+        if clusterConsole.count > 400 { clusterConsole.removeFirst(clusterConsole.count - 400) }
     }
 
     private func logbookSignature(for url: URL) -> String {

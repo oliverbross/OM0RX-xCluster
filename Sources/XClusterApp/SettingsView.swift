@@ -50,10 +50,22 @@ struct SettingsView: View {
             }
             Section("Live table") {
                 Picker("Maximum visible spots", selection: $model.settings.maximumSpots) { ForEach([50, 100, 200, 500], id: \.self) { Text(String($0)).tag($0) } }.frame(width: 220)
+                Toggle("Show already worked callsign, band and mode combinations", isOn: $model.settings.showWorkedBandModeSpots)
+                Text("Off by default. New-band and new-mode opportunities remain visible; only exact combinations already in the RUMlog log are hidden.").font(.caption).foregroundStyle(Theme.secondary)
+                Toggle("Request RBN / Skimmer spots from clusters", isOn: $model.settings.requestSkimmerSpots)
+                Text("Sends set/skimmer after login (or unset/skimmer when disabled). The Sources filter then separates RBN reports from ordinary cluster spots.").font(.caption).foregroundStyle(Theme.secondary)
                 Toggle("Reconnect clusters automatically", isOn: $model.settings.reconnect)
             }
             Section("RUMlogNG control") {
-                Text("Double-clicking sends callsign, mode, log frequency and TX frequency through RUMlogNG's Apple-event interface. macOS will ask for Automation permission on first use.").font(.caption).foregroundStyle(Theme.secondary)
+                Text("Clicking a spot sends callsign, mode, log frequency and TX frequency through RUMlogNG's Apple-event interface. macOS will ask for Automation permission on first use.").font(.caption).foregroundStyle(Theme.secondary)
+                Toggle("Set the radio mode through OM0RX-xCat / RigCtlD", isOn: $model.settings.rigCtlModeEnabled)
+                HStack {
+                    labeled("RigCtlD host", TextField("127.0.0.1", text: $model.settings.rigCtlHost).frame(width: 180))
+                    labeled("Port", TextField("14532", value: $model.settings.rigCtlPort, format: .number).frame(width: 90))
+                    Spacer()
+                }
+                .disabled(!model.settings.rigCtlModeEnabled)
+                Text("RUMlog's Apple-event interface tunes frequency but does not command the radio mode. This optional localhost handoff sets CW, USB/LSB, RTTY or DIGU directly after RUMlog receives the spot.").font(.caption).foregroundStyle(Theme.secondary)
             }
         }.formStyle(.grouped).scrollContentBackground(.hidden)
     }

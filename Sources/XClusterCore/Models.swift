@@ -136,6 +136,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var logbookPath: String
     public var maximumSpots: Int
     public var reconnect: Bool
+    public var requestSkimmerSpots: Bool
+    public var showWorkedBandModeSpots: Bool
+    public var rigCtlModeEnabled: Bool
+    public var rigCtlHost: String
+    public var rigCtlPort: Int
     public var statusPalette: StatusPalette
     public var specialRules: [SpecialRule]
 
@@ -144,6 +149,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
         logbookPath: "",
         maximumSpots: 200,
         reconnect: true,
+        requestSkimmerSpots: true,
+        showWorkedBandModeSpots: false,
+        rigCtlModeEnabled: true,
+        rigCtlHost: "127.0.0.1",
+        rigCtlPort: 14532,
         statusPalette: .defaults,
         specialRules: [
             SpecialRule(name: "POTA", keywords: ["POTA"], referenceFormat: .pota),
@@ -157,6 +167,59 @@ public struct AppSettings: Codable, Equatable, Sendable {
             SpecialRule(name: "IARU", keywords: ["IARU"]),
         ]
     )
+
+    private enum CodingKeys: String, CodingKey {
+        case clusters, logbookPath, maximumSpots, reconnect, requestSkimmerSpots, showWorkedBandModeSpots
+        case rigCtlModeEnabled, rigCtlHost, rigCtlPort, statusPalette, specialRules
+    }
+
+    public init(clusters: [ClusterServer], logbookPath: String, maximumSpots: Int, reconnect: Bool,
+                requestSkimmerSpots: Bool, showWorkedBandModeSpots: Bool,
+                rigCtlModeEnabled: Bool, rigCtlHost: String, rigCtlPort: Int,
+                statusPalette: StatusPalette, specialRules: [SpecialRule]) {
+        self.clusters = clusters
+        self.logbookPath = logbookPath
+        self.maximumSpots = maximumSpots
+        self.reconnect = reconnect
+        self.requestSkimmerSpots = requestSkimmerSpots
+        self.showWorkedBandModeSpots = showWorkedBandModeSpots
+        self.rigCtlModeEnabled = rigCtlModeEnabled
+        self.rigCtlHost = rigCtlHost
+        self.rigCtlPort = rigCtlPort
+        self.statusPalette = statusPalette
+        self.specialRules = specialRules
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = Self.defaults
+        clusters = try values.decodeIfPresent([ClusterServer].self, forKey: .clusters) ?? defaults.clusters
+        logbookPath = try values.decodeIfPresent(String.self, forKey: .logbookPath) ?? defaults.logbookPath
+        maximumSpots = try values.decodeIfPresent(Int.self, forKey: .maximumSpots) ?? defaults.maximumSpots
+        reconnect = try values.decodeIfPresent(Bool.self, forKey: .reconnect) ?? defaults.reconnect
+        requestSkimmerSpots = try values.decodeIfPresent(Bool.self, forKey: .requestSkimmerSpots) ?? true
+        showWorkedBandModeSpots = try values.decodeIfPresent(Bool.self, forKey: .showWorkedBandModeSpots) ?? false
+        rigCtlModeEnabled = try values.decodeIfPresent(Bool.self, forKey: .rigCtlModeEnabled) ?? true
+        rigCtlHost = try values.decodeIfPresent(String.self, forKey: .rigCtlHost) ?? "127.0.0.1"
+        rigCtlPort = try values.decodeIfPresent(Int.self, forKey: .rigCtlPort) ?? 14532
+        statusPalette = try values.decodeIfPresent(StatusPalette.self, forKey: .statusPalette) ?? defaults.statusPalette
+        specialRules = try values.decodeIfPresent([SpecialRule].self, forKey: .specialRules) ?? defaults.specialRules
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(clusters, forKey: .clusters)
+        try values.encode(logbookPath, forKey: .logbookPath)
+        try values.encode(maximumSpots, forKey: .maximumSpots)
+        try values.encode(reconnect, forKey: .reconnect)
+        try values.encode(requestSkimmerSpots, forKey: .requestSkimmerSpots)
+        try values.encode(showWorkedBandModeSpots, forKey: .showWorkedBandModeSpots)
+        try values.encode(rigCtlModeEnabled, forKey: .rigCtlModeEnabled)
+        try values.encode(rigCtlHost, forKey: .rigCtlHost)
+        try values.encode(rigCtlPort, forKey: .rigCtlPort)
+        try values.encode(statusPalette, forKey: .statusPalette)
+        try values.encode(specialRules, forKey: .specialRules)
+    }
 }
 
 public struct CountryInfo: Codable, Hashable, Sendable {
@@ -248,6 +311,7 @@ public struct QSORecord: Identifiable, Hashable, Sendable {
 
 public struct HistorySummary: Sendable {
     public var records: [QSORecord]
+    public var dxccRecords: [QSORecord]
     public var country: CountryInfo?
     public var grid: String
 }

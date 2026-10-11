@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2 — 2026-10-11
+
+- Adds a cluster-command console beside the RUMlog contact count, with one/all-cluster targeting, useful read-only presets, custom commands, and copyable responses.
+- Removes trailing DX-cluster UTC timestamps such as `0003Z` from spot comments while preserving meaningful numbers elsewhere.
+- Requests RBN/Skimmer spots from each cluster with `set/skimmer` by default and provides a setting to disable the upstream feed.
+- Hides exact callsign/band/mode combinations already worked by default, with a setting to show them; new-band and new-mode opportunities remain visible.
+- Corrects the Previous QSOs matrix to show country-wide DXCC band/mode history rather than only the selected callsign's history.
+- Adds configurable OM0RX-xCat/RigCtlD mode control after the RUMlog handoff, because RUMlog's Apple-event `txFrequency` changes radio frequency but not radio mode.
+
 ## 0.1.1 — 2026-10-11
 
 - Fixes Worked b4 dates when a callsign was worked on the same band in a

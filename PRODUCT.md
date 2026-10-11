@@ -24,7 +24,7 @@ Unlike a generic cluster client, xCluster derives call, band, mode, DXCC, confir
 
 ## Operating Context
 
-The app runs beside RUMlogNG during live operating. The operator scans a dense table, narrows it with persistent filters, opens previous-QSO evidence with one click, and double-clicks a row to transfer the target to RUMlogNG. The selected `.rlog` is also synchronized with Wavelog by OM0RX-xBridge.
+The app runs beside RUMlogNG during live operating. The operator scans a dense table, narrows it with persistent filters, clicks the callsign for previous-QSO evidence, and clicks another row cell to transfer the target to RUMlogNG. The selected `.rlog` is also synchronized with Wavelog by OM0RX-xBridge.
 
 ## Capabilities and Constraints
 

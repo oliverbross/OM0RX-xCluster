@@ -31,6 +31,17 @@ struct ContentView: View {
             Divider().frame(height: 18)
             connectionBadge
             Label(model.logbookStatus, systemImage: "externaldrive.badge.checkmark").foregroundStyle(model.logbook.recordCount > 0 ? Theme.text : Theme.amber)
+            Button { model.showingClusterCommands.toggle() } label: {
+                Label("Commands", systemImage: "terminal")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(model.connectedCount > 0 ? Theme.cyan : Theme.secondary)
+            }
+            .buttonStyle(.plain)
+            .disabled(model.connectedCount == 0)
+            .help(model.connectedCount > 0 ? "Send a command to one or more connected clusters" : "Connect to a cluster to send commands")
+            .popover(isPresented: $model.showingClusterCommands, arrowEdge: .bottom) {
+                ClusterCommandPanel().environmentObject(model)
+            }
             Spacer()
             Text("\(model.filteredSpots.count) shown · \(model.spots.count) live").foregroundStyle(Theme.secondary).monospacedDigit()
             Button { model.reconnectClusters() } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.plain).help("Reconnect all clusters")
@@ -91,6 +102,121 @@ struct ContentView: View {
 
     private func detail(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) { Text(label.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(Theme.secondary); Text(value).lineLimit(2).foregroundStyle(Theme.text) }.frame(maxWidth: 270, alignment: .leading)
+    }
+}
+
+private struct ClusterCommandPanel: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var copied = false
+
+    private let quickCommands: [(String, String, String, String)] = [
+        ("Recent DX", "Last 50 spots", "sh/dx/50", "clock.arrow.circlepath"),
+        ("My DX", "Cluster-filtered spots", "sh/mydx 50", "line.3.horizontal.decrease.circle"),
+        ("WWV", "Solar conditions", "sh/wwv/5", "sun.max"),
+        ("WCY", "Propagation report", "sh/wcy/5", "waveform.path.ecg"),
+        ("Announcements", "Last 10 notices", "sh/ann/10", "megaphone"),
+        ("Users", "Connected operators", "sh/u", "person.2"),
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Label("Cluster commands", systemImage: "terminal.fill")
+                    .font(.headline).foregroundStyle(Theme.teal)
+                Spacer()
+                Picker("Target", selection: $model.clusterCommandTarget) {
+                    Text("All connected").tag(Optional<UUID>.none)
+                    ForEach(model.settings.clusters.filter(\.enabled)) { server in
+                        Text(server.name).tag(Optional(server.id))
+                    }
+                }
+                .pickerStyle(.menu).labelsHidden().frame(width: 170)
+                Button { model.showingClusterCommands = false } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.plain).help("Close")
+            }
+            .padding(14).background(Theme.surface)
+
+            Divider().overlay(Theme.rule)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                ForEach(quickCommands, id: \.2) { title, detail, command, icon in
+                    Button { model.sendClusterCommand(command) } label: {
+                        HStack(spacing: 9) {
+                            Image(systemName: icon).frame(width: 18).foregroundStyle(Theme.cyan)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.text)
+                                Text(detail).font(.caption2).foregroundStyle(Theme.secondary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 10).frame(height: 44)
+                        .background(Theme.raised).clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.rule))
+                    }
+                    .buttonStyle(.plain).help("Send \(command)")
+                }
+            }
+            .padding(12)
+
+            HStack(spacing: 8) {
+                Image(systemName: "chevron.right").foregroundStyle(Theme.teal)
+                TextField("Custom command, for example: sh/dx 20 on 20m", text: $model.customClusterCommand)
+                    .textFieldStyle(.plain).onSubmit { model.sendClusterCommand(model.customClusterCommand) }
+                Button("Send") { model.sendClusterCommand(model.customClusterCommand) }
+                    .buttonStyle(.borderedProminent).tint(Theme.teal)
+                    .disabled(model.customClusterCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.horizontal, 10).frame(height: 36)
+            .background(Theme.raised).clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.rule))
+            .padding(.horizontal, 12).padding(.bottom, 12)
+
+            HStack {
+                Text("Cluster response").font(.caption.weight(.semibold)).foregroundStyle(Theme.secondary)
+                Spacer()
+                Button(copied ? "Copied" : "Copy") { copyTranscript() }.buttonStyle(.borderless).disabled(model.clusterConsole.isEmpty)
+                Button("Clear") { model.clearClusterConsole() }.buttonStyle(.borderless).disabled(model.clusterConsole.isEmpty)
+            }
+            .padding(.horizontal, 14).frame(height: 28).background(Theme.surface)
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 5) {
+                        if model.clusterConsole.isEmpty {
+                            Text("Choose a command above. Its reply will appear here.")
+                                .foregroundStyle(Theme.secondary).padding(.vertical, 18)
+                        } else {
+                            ForEach(model.clusterConsole) { line in
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    Text(line.receivedAt.formatted(date: .omitted, time: .standard))
+                                        .foregroundStyle(Theme.secondary).monospacedDigit().frame(width: 70, alignment: .leading)
+                                    Text(line.source).foregroundStyle(line.isCommand ? Theme.teal : Theme.cyan).frame(width: 92, alignment: .leading)
+                                    Text(line.text).foregroundStyle(line.isCommand ? Theme.text : Color(hex: "#C8D4E3"))
+                                        .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .font(.system(size: 11, design: .monospaced)).id(line.id)
+                            }
+                        }
+                    }
+                    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .background(Theme.background)
+                .onChange(of: model.clusterConsole.count) { _ in
+                    if let id = model.clusterConsole.last?.id {
+                        withAnimation(.easeOut(duration: 0.16)) { proxy.scrollTo(id, anchor: .bottom) }
+                    }
+                }
+            }
+        }
+        .frame(width: 660, height: 480).background(Theme.background).preferredColorScheme(.dark)
+    }
+
+    private func copyTranscript() {
+        let transcript = model.clusterConsole.map { "[\($0.source)] \($0.text)" }.joined(separator: "\n")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(transcript, forType: .string)
+        copied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
     }
 }
 
@@ -360,7 +486,13 @@ private struct HistorySheet: View {
 
     private var matrix: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Band/Mode Matrix").font(.headline).foregroundStyle(Theme.teal)
+            HStack {
+                Text("DXCC Band/Mode Matrix").font(.headline).foregroundStyle(Theme.teal)
+                if let country = summary.country {
+                    Text("\(country.name.capitalized) · \(summary.dxccRecords.count) contacts")
+                        .font(.caption).foregroundStyle(Theme.secondary)
+                }
+            }
             Grid(horizontalSpacing: 0, verticalSpacing: 0) {
                 GridRow { Text("").matrixCell(header: true); ForEach(bands, id: \.self) { Text($0).matrixCell(header: true) } }
                 ForEach(modes, id: \.self) { mode in GridRow { Text(mode).matrixCell(header: true); ForEach(bands, id: \.self) { band in matrixCell(mode: mode, band: band) } } }
@@ -370,7 +502,7 @@ private struct HistorySheet: View {
     }
 
     private func matrixCell(mode: String, band: String) -> some View {
-        let matches = summary.records.filter { $0.mode == mode && $0.band == band }
+        let matches = summary.dxccRecords.filter { $0.mode == mode && $0.band == band }
         return Group { if matches.contains(where: \.isConfirmed) { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.confirmed) } else if !matches.isEmpty { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.worked) } else { Text("-").foregroundStyle(Theme.secondary) } }.frame(width: 68, height: 30).overlay(Rectangle().stroke(Theme.rule.opacity(0.55), lineWidth: 0.5))
     }
 }

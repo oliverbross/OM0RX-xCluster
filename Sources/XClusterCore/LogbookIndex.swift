@@ -17,6 +17,7 @@ public struct LogbookIndex: Sendable {
     public let modifiedAt: Date?
     public let recordCount: Int
     private let recordsByCall: [String: [QSORecord]]
+    private let recordsByADIF: [Int: [QSORecord]]
     private let callBands: [String: Set<String>]
     private let callModes: [String: Set<String>]
     private let workedCallBandModes: Set<String>
@@ -27,7 +28,7 @@ public struct LogbookIndex: Sendable {
     private let confirmedDXCC: Set<Int>
     private let confirmedDXCCBandModes: Set<String>
 
-    public static let empty = LogbookIndex(loadedAt: .distantPast, modifiedAt: nil, recordCount: 0, recordsByCall: [:], callBands: [:], callModes: [:], workedCallBandModes: [], confirmedCallBandModes: [], dxccBands: [:], dxccModes: [:], workedDXCC: [], confirmedDXCC: [], confirmedDXCCBandModes: [])
+    public static let empty = LogbookIndex(loadedAt: .distantPast, modifiedAt: nil, recordCount: 0, recordsByCall: [:], recordsByADIF: [:], callBands: [:], callModes: [:], workedCallBandModes: [], confirmedCallBandModes: [], dxccBands: [:], dxccModes: [:], workedDXCC: [], confirmedDXCC: [], confirmedDXCCBandModes: [])
 
     public static func load(url: URL) throws -> LogbookIndex {
         guard FileManager.default.fileExists(atPath: url.path) else { throw LogbookError.missing(url.path) }
@@ -51,6 +52,7 @@ public struct LogbookIndex: Sendable {
         defer { sqlite3_finalize(statement) }
 
         var byCall: [String: [QSORecord]] = [:]
+        var byADIF: [Int: [QSORecord]] = [:]
         var callBands: [String: Set<String>] = [:], callModes: [String: Set<String>] = [:]
         var workedCallBandModes = Set<String>(), confirmedCallBandModes = Set<String>(), dxccBands: [Int: Set<String>] = [:], dxccModes: [Int: Set<String>] = [:]
         var workedDXCC = Set<Int>(), confirmedDXCC = Set<Int>(), confirmedDXCCBandModes = Set<String>()
@@ -78,6 +80,7 @@ public struct LogbookIndex: Sendable {
             workedCallBandModes.insert(key(call, band, mode))
             if record.isConfirmed { confirmedCallBandModes.insert(key(call, band, mode)) }
             if record.adif > 0 {
+                byADIF[record.adif, default: []].append(record)
                 workedDXCC.insert(record.adif); dxccBands[record.adif, default: []].insert(band); dxccModes[record.adif, default: []].insert(mode)
                 if record.isConfirmed { confirmedDXCC.insert(record.adif); confirmedDXCCBandModes.insert(key(String(record.adif), band, mode)) }
             }
@@ -88,7 +91,7 @@ public struct LogbookIndex: Sendable {
         }
         let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
         return LogbookIndex(loadedAt: Date(), modifiedAt: attributes?[.modificationDate] as? Date, recordCount: count,
-                            recordsByCall: byCall, callBands: callBands, callModes: callModes,
+                            recordsByCall: byCall, recordsByADIF: byADIF, callBands: callBands, callModes: callModes,
                             workedCallBandModes: workedCallBandModes, confirmedCallBandModes: confirmedCallBandModes,
                             dxccBands: dxccBands, dxccModes: dxccModes,
                             workedDXCC: workedDXCC, confirmedDXCC: confirmedDXCC, confirmedDXCCBandModes: confirmedDXCCBandModes)
@@ -123,7 +126,9 @@ public struct LogbookIndex: Sendable {
     public func history(call: String, country: CountryInfo?) -> HistorySummary {
         let normalizedCall = call.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let records = recordsByCall[normalizedCall] ?? []
-        return HistorySummary(records: records, country: country, grid: records.first(where: { !$0.grid.isEmpty })?.grid ?? "")
+        let dxccRecords = country.map { recordsByADIF[$0.adif] ?? [] } ?? []
+        return HistorySummary(records: records, dxccRecords: dxccRecords, country: country,
+                              grid: records.first(where: { !$0.grid.isEmpty })?.grid ?? "")
     }
 
     static func workedBeforeDate(records: [QSORecord], band: String, mode: String) -> Date? {

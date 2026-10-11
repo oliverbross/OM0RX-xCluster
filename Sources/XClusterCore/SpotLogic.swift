@@ -46,8 +46,14 @@ public enum SpotLogic {
     }
 
     public static func source(spotter: String, comment: String) -> String {
+        let spotterText = spotter.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let text = comment.uppercased()
-        return spotter.uppercased().hasSuffix("-#") || text.range(of: #"\b(RBL|RBN|SKIMMER)\b"#, options: .regularExpression) != nil ? "rbl" : "cluster"
+        let skimmerSpotter = spotterText.hasSuffix("-#") || spotterText.hasSuffix("/#")
+        return skimmerSpotter || text.range(of: #"\b(RBL|RBN|SKIMMER)\b"#, options: .regularExpression) != nil ? "rbl" : "cluster"
+    }
+
+    public static func shouldShow(callStatus: String, showWorkedBandModeSpots: Bool) -> Bool {
+        showWorkedBandModeSpots || (callStatus != "Worked" && callStatus != "Confirmed")
     }
 
     public static func specials(in comment: String, rules: [SpecialRule]) -> [String] {
@@ -115,10 +121,16 @@ public enum ClusterLineParser {
               let callRange = Range(match.range(at: 3), in: cleaned),
               let frequency = Double(cleaned[frequencyRange]) else { return nil }
         let commentRange = Range(match.range(at: 4), in: cleaned)
+        let rawComment = commentRange.map { String(cleaned[$0]).trimmingCharacters(in: .whitespaces) } ?? ""
+        let comment = rawComment.replacingOccurrences(
+            of: #"(?:^|\s)(?:[01]\d|2[0-3])[0-5]\dZ\s*$"#,
+            with: "",
+            options: [.regularExpression, .caseInsensitive]
+        ).trimmingCharacters(in: .whitespaces)
         return RawSpot(clusterID: clusterID, clusterName: clusterName, spotter: String(cleaned[spotterRange]),
                        frequencyKHz: frequency, frequencyText: String(cleaned[frequencyRange]),
                        callsign: String(cleaned[callRange]).uppercased(),
-                       comment: commentRange.map { String(cleaned[$0]).trimmingCharacters(in: .whitespaces) } ?? "",
+                       comment: comment,
                        receivedAt: date)
     }
 }
